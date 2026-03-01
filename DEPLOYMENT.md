@@ -1,0 +1,808 @@
+# Deployment Guide
+
+Operational guide for deploying and running the Distributed Video Encoder system. For architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md). For agent internals, see [AGENTS.md](AGENTS.md).
+
+---
+
+## 1. Prerequisites
+
+### 1.1 Controller Host
+
+| Requirement | Minimum | Recommended |
+|---|---|---|
+| **OS** | Ubuntu 22.04 LTS (or Docker host) | Ubuntu 24.04 LTS |
+| **CPU** | 2 cores | 4+ cores |
+| **RAM** | 2 GB | 4+ GB |
+| **Disk** | 20 GB | 50+ GB (log retention, analysis data) |
+| **Docker** | 24.0+ with Compose v2 | Latest stable |
+| **Network** | Ports 8080 (HTTP) and 9443 (gRPC) open to agents | Reverse proxy (nginx/Caddy) in front of 8080 |
+
+### 1.2 Agent Host
+
+| Requirement | Minimum | Recommended |
+|---|---|---|
+| **OS** | Windows Server 2019 | Windows Server 2022 |
+| **CPU** | 4 cores | 8+ cores (encoding is CPU-intensive) |
+| **RAM** | 8 GB | 16+ GB |
+| **Disk** | 50 GB free (work directory) | SSD with 100+ GB |
+| **GPU** | Optional | NVIDIA RTX series (NVENC) or Intel Arc (QSV) |
+| **Network** | Access to Controller on port 9443; access to UNC file shares | 10 GbE for large m2ts files |
+
+### 1.3 Shared Storage
+
+- NAS or SAN accessible via UNC paths (`\\server\share`) from all agent machines.
+- Agents need read access to source files and write access to output directories.
+- Recommended: SMB3 with encryption enabled for data in transit.
+
+### 1.4 PostgreSQL
+
+- Version 16+ required.
+- Can run as a container alongside the Controller (default) or as an external managed instance.
+- For HA: Patroni + pgBouncer (see section 6).
+
+---
+
+## 2. Controller Deployment
+
+### 2.1 Environment File
+
+Create a `.env` file in the deployment directory. **Never commit this file to version control.** All environment variables use the `DE_` prefix (see ARCHITECTURE.md §6 for the full reference).
+
+```bash
+# .env — Controller
+DE_DB_PASS=<strong-random-password>
+DE_DB_HOST=postgres
+DE_DB_PORT=5432
+DE_DB_NAME=distencoder
+DE_DB_USER=distenc
+
+# gRPC TLS (paths inside the container)
+DE_GRPC_TLS_CERT=/certs/server.crt
+DE_GRPC_TLS_KEY=/certs/server.key
+DE_GRPC_TLS_CA=/certs/ca.crt
+
+# Web UI + REST API
+DE_HTTP_PORT=8080
+DE_GRPC_PORT=9443
+
+# Webhook signing (optional, auto-generated if empty)
+DE_WEBHOOK_HMAC_SECRET=<random-secret>
+
+# Authentication
+DE_SESSION_SECRET=<random-64-char-hex>
+DE_OIDC_CLIENT_ID=                      # leave empty to disable OIDC
+DE_OIDC_CLIENT_SECRET=
+```
+
+A `.env.example` is committed to the repo documenting all variables with placeholder values.
+
+### 2.2 TLS Certificate Setup
+
+Generate a self-signed CA and server/agent certificates for mTLS:
+
+```bash
+# Create CA
+openssl genrsa -out ca.key 4096
+openssl req -new -x509 -days 3650 -key ca.key -out ca.crt \
+  -subj "/CN=DistEncoder CA"
+
+# Create server cert (Controller)
+openssl genrsa -out server.key 2048
+openssl req -new -key server.key -out server.csr \
+  -subj "/CN=controller.internal"
+openssl x509 -req -days 365 -in server.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out server.crt \
+  -extfile <(printf "subjectAltName=DNS:controller.internal,DNS:localhost,IP:10.0.0.10")
+
+# Create agent cert (repeat per agent, or use a wildcard)
+openssl genrsa -out agent.key 2048
+openssl req -new -key agent.key -out agent.csr \
+  -subj "/CN=agent"
+openssl x509 -req -days 365 -in agent.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out agent.crt
+```
+
+Place `ca.crt`, `server.crt`, and `server.key` in a `certs/` directory accessible to the Controller container.
+
+### 2.3 Docker Compose Launch
+
+```bash
+# From the deployments/ directory
+cd deployments/
+
+# Start everything
+docker compose up -d
+
+# Verify
+docker compose ps
+docker compose logs -f controller
+```
+
+Expected output (structured JSON via `log/slog`):
+```
+controller  | {"level":"info","msg":"starting controller","http_port":8080,"grpc_port":9443,"request_id":"init"}
+controller  | {"level":"info","msg":"database connected","host":"postgres"}
+controller  | {"level":"info","msg":"migrations applied","version":2}
+controller  | {"level":"info","msg":"task log cleanup scheduled","retention":"30d","interval":"6h"}
+controller  | {"level":"info","msg":"gRPC server listening","port":9443,"tls":true}
+controller  | {"level":"info","msg":"HTTP server listening","port":8080}
+```
+
+### 2.4 Bare-Metal (Ubuntu, No Docker)
+
+```bash
+# Install PostgreSQL
+sudo apt install -y postgresql-16
+
+# Create database and user
+sudo -u postgres psql -c "CREATE USER distenc WITH PASSWORD '<password>';"
+sudo -u postgres psql -c "CREATE DATABASE distencoder OWNER distenc;"
+
+# Download controller binary
+curl -Lo /usr/local/bin/distencoder \
+  https://releases.example.com/distencoder-controller-linux-amd64
+chmod +x /usr/local/bin/distencoder
+
+# Create systemd service
+cat > /etc/systemd/system/distencoder.service << 'EOF'
+[Unit]
+Description=Distributed Encoder Controller
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=distencoder
+EnvironmentFile=/etc/distencoder/.env
+ExecStart=/usr/local/bin/distencoder run --config /etc/distencoder/controller.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable --now distencoder
+```
+
+### 2.5 Initial Configuration via Web UI
+
+1. Open `http://<controller-ip>:8080` in a browser.
+2. Complete the first-run setup wizard:
+   - Create an **admin** account (local username/password, hashed with bcrypt).
+   - Set the default UNC share paths for source files and output.
+   - Configure global variables (encoder paths, default parameters).
+3. **(Optional) Configure OIDC/SSO** — under **Settings**, enter the OIDC provider URL, client ID, and client secret (Azure AD, Keycloak, or Google Workspace). OIDC users are auto-provisioned on first login if `auto_provision: true` is set in `config.yaml`.
+4. Add webhook endpoints (Discord/Teams/Slack) under **Settings > Webhooks**.
+5. Create at least one encoding template under **Templates**:
+   - **Run scripts** (`.bat`) — define the encoder invocation (x265, SVT-AV1, ffmpeg, etc.).
+   - **Frameserver scripts** (`.avs` / `.vpy`) — define video filtering (deinterlace, denoise, crop, etc.).
+   - Use the **Template Editor** (`/admin/templates/{id}`) for syntax-highlighted editing with a variable reference panel and live preview. Templates use Go `text/template` syntax — see ARCHITECTURE.md §3.4 for available variables and custom functions.
+   - Click **Preview** to render the template with sample data before saving. A bad template can cause all jobs to fail.
+6. **(Optional) Run a scene detection scan** on a source file before encoding. Scene boundaries enable **scene-based chunking** during encode configuration — each chunk gets its own `.avs`/`.vpy` with correct frame ranges.
+7. **Review the API docs** (admin only) at `/api/docs` to explore the REST API via the built-in Swagger UI. Disabled in production by default — enable in `config.yaml` with `api.docs_enabled: true`.
+
+### 2.6 Agent Approval
+
+When agents first connect, they appear in the web UI with a **pending_approval** status. An admin must approve each agent before it receives work:
+
+1. Open **Farm Servers** in the web UI.
+2. New agents appear in orange with status `pending_approval`.
+3. Click **Approve** to move the agent to `idle` (it will start receiving tasks on next poll).
+
+Alternatively, approve via CLI:
+
+```bash
+controller server approve ENCODE-01
+controller server approve --all    # approve all pending agents (trusted networks only)
+```
+
+For trusted networks, set `agent.auto_approve: true` in `config.yaml` to skip manual approval.
+
+---
+
+## 3. Agent Deployment
+
+### 3.1 Directory Structure
+
+Create the following on each Windows Server agent:
+
+```
+C:\DistEncoder\
+├── distencoder-agent.exe
+├── agent.yaml
+├── .env                (agent secrets — never committed)
+├── certs\
+│   ├── ca.crt          (same CA as controller)
+│   ├── agent.crt
+│   └── agent.key
+├── work\               (auto-created, stores job scripts and temp files)
+├── logs\               (auto-created, local system log output — task logs go to controller)
+└── offline.db          (auto-created, SQLite journal for offline results + buffered logs)
+```
+
+### 3.2 Agent Configuration
+
+Create `agent.yaml` (see [AGENTS.md](AGENTS.md) for the full reference):
+
+```yaml
+controller:
+  address: "<controller-hostname-or-ip>:9443"
+  tls:
+    cert: "C:\\DistEncoder\\certs\\agent.crt"
+    key: "C:\\DistEncoder\\certs\\agent.key"
+    ca: "C:\\DistEncoder\\certs\\ca.crt"
+
+agent:
+  work_dir: "C:\\DistEncoder\\work"
+  log_dir: "C:\\DistEncoder\\logs"
+  offline_db: "C:\\DistEncoder\\offline.db"
+  heartbeat_interval: 30s
+  poll_interval: 10s
+  cleanup_on_success: true
+
+tools:
+  ffmpeg: "C:\\Tools\\ffmpeg\\ffmpeg.exe"
+  ffprobe: "C:\\Tools\\ffmpeg\\ffprobe.exe"
+  x265: "C:\\Tools\\x265\\x265.exe"
+  avs_pipe: "C:\\Program Files\\AviSynth+\\avs2pipemod.exe"
+  vspipe: "C:\\Program Files\\VapourSynth\\vspipe.exe"
+
+gpu:
+  enabled: true
+
+allowed_shares:
+  - "\\\\NAS01\\media"
+  - "\\\\NAS01\\encodes"
+
+logging:
+  level: info
+  format: json
+```
+
+### 3.3 Service Installation
+
+Run PowerShell as Administrator:
+
+```powershell
+# Install the Windows Service
+C:\DistEncoder\distencoder-agent.exe install --config "C:\DistEncoder\agent.yaml"
+
+# Start the service
+C:\DistEncoder\distencoder-agent.exe start
+
+# Verify
+Get-Service DistEncoderAgent
+```
+
+The agent should appear as **pending_approval** in the Controller web UI within 30 seconds. An admin must approve it before it receives tasks (see §2.6 Agent Approval).
+
+### 3.4 Tool Verification
+
+Before assigning jobs, verify all required tools are accessible:
+
+```powershell
+# FFmpeg
+& "C:\Tools\ffmpeg\ffmpeg.exe" -version
+
+# x265
+& "C:\Tools\x265\x265.exe" --version
+
+# AviSynth+ (if used)
+& "C:\Program Files\AviSynth+\avs2pipemod.exe" -h
+
+# VapourSynth (if used)
+& "C:\Program Files\VapourSynth\vspipe.exe" --version
+
+# GPU (NVIDIA)
+nvidia-smi
+```
+
+### 3.5 Encoding Workflow — Templates & Scene-Based Chunking
+
+Once agents are approved and tools verified, the typical encoding workflow is:
+
+1. **Detect source** — agent discovers a `.m2ts` file in a UNC drop-folder, or an operator adds it manually via the web UI.
+2. **Scan (optional)** — run histogram, VMAF, and/or **scene detection** scans on the source via **Sources > Scan**.
+3. **Configure encode** — navigate to **Sources > Configure Encode**:
+   - Select a **run script** template (`.bat`) and a **frameserver** template (`.avs` or `.vpy`).
+   - Choose **chunking mode**:
+     - **Fixed-size** — splits the source into equal frame-count chunks.
+     - **Scene-based** — uses scene detection results to generate per-scene chunks with correct `Trim()` (AVS) or slice (VPY) frame ranges. Requires a completed scene detection scan.
+   - For scene-based mode, adjust **min merge** (merge scenes smaller than this threshold) and **max chunk** (split scenes larger than this) to control chunk granularity.
+   - Click **Preview Scripts for Chunk N** to render the template for a specific chunk before submitting.
+4. **Submit** — the controller generates one `.avs`/`.vpy` + `.bat` per chunk and writes them to the UNC share:
+   ```
+   \\NAS\media\source_dir\
+   ├── source.m2ts
+   └── chunks\
+       ├── chunk_000\
+       │   ├── encode.bat
+       │   └── frameserver.avs
+       ├── chunk_001\
+       │   ├── encode.bat
+       │   └── frameserver.avs
+       └── ...
+   ```
+5. **Agents execute** — each agent picks up a chunk task, executes `encode.bat` directly from the UNC path, and streams logs + progress to the controller.
+
+**Template management** is under **Admin > Templates**. The template editor provides syntax highlighting, a variable reference panel, and live preview. See ARCHITECTURE.md §3.4 for template variables (`.TrimStart`, `.TrimEnd`, `.ChunkIndex`, `.SceneIndex`, etc.) and custom functions (`uncPath`, `escapeBat`, `gpuFlag`, `trimAvs`, `trimVpy`).
+
+### 3.6 Service Account
+
+For production, run the agent under a dedicated low-privilege service account:
+
+1. Create a local or domain user (e.g. `svc_distencoder`).
+2. Grant it:
+   - Read access to source UNC shares.
+   - Read/write access to output UNC shares.
+   - Full control of `C:\DistEncoder\`.
+   - "Log on as a service" right.
+3. Update the service to run as this account:
+   ```powershell
+   sc.exe config DistEncoderAgent obj= "DOMAIN\svc_distencoder" password= "<password>"
+   ```
+
+---
+
+## 4. Database Migrations
+
+### 4.1 Running Migrations
+
+Migrations run automatically on Controller startup by default. To run them manually:
+
+```bash
+# Inside the container
+docker compose exec controller distencoder migrate up
+
+# Or with the standalone migrate tool
+export DATABASE_URL="postgres://distenc:<password>@<host>:5432/distencoder?sslmode=require"
+migrate -path internal/db/migrations -database "$DATABASE_URL" up
+```
+
+### 4.2 Rolling Back
+
+```bash
+# Roll back the last migration
+migrate -path internal/db/migrations -database "$DATABASE_URL" down 1
+
+# Check current version
+migrate -path internal/db/migrations -database "$DATABASE_URL" version
+```
+
+### 4.3 Creating New Migrations
+
+```bash
+migrate create -ext sql -dir internal/db/migrations -seq <description>
+# Creates: NNN_<description>.up.sql and NNN_<description>.down.sql
+```
+
+---
+
+## 5. Networking & Firewall
+
+### 5.1 Required Ports
+
+| From | To | Port | Protocol | Purpose |
+|---|---|---|---|---|
+| Agents | Controller | 9443/tcp | gRPC (TLS) | Agent registration, heartbeat, task polling, result reporting |
+| Users/API | Controller | 8080/tcp | HTTPS | Web UI and REST API |
+| Controller | PostgreSQL | 5432/tcp | TLS | Database connections |
+| Agents | NAS/SAN | 445/tcp | SMB | UNC file share access |
+| Controller | Discord/Teams/Slack | 443/tcp | HTTPS | Webhook delivery (outbound only) |
+
+### 5.2 Windows Firewall (Agent)
+
+The agent makes outbound connections only — no inbound firewall rules are required on the agent unless the optional health/metrics HTTP endpoint is enabled.
+
+```powershell
+# Optional: allow inbound for agent health endpoint
+New-NetFirewallRule -DisplayName "DistEncoder Agent Health" `
+  -Direction Inbound -Protocol TCP -LocalPort 9080 -Action Allow
+```
+
+### 5.3 Reverse Proxy (Recommended for Production)
+
+Place nginx or Caddy in front of the Controller for TLS termination, rate limiting, and access logging:
+
+```nginx
+# /etc/nginx/sites-available/distencoder
+server {
+    listen 443 ssl;
+    server_name encoder.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/encoder.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/encoder.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+The gRPC port (9443) should **not** go through the HTTP reverse proxy — agents connect directly.
+
+---
+
+## 6. High Availability (PostgreSQL)
+
+For environments that need zero-downtime database failover.
+
+### 6.1 Patroni + pgBouncer Setup
+
+```yaml
+# deployments/patroni/docker-compose.ha.yml
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5
+    environment:
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd:2379
+    volumes:
+      - etcd-data:/etcd-data
+
+  pg-node-1:
+    image: patroni-distencoder:latest
+    environment:
+      PATRONI_NAME: pg1
+      PATRONI_ETCD_HOSTS: etcd:2379
+      PATRONI_POSTGRESQL_DATA_DIR: /data/pg
+      PATRONI_REPLICATION_USERNAME: replicator
+      PATRONI_REPLICATION_PASSWORD: ${REPL_PASS}
+      PATRONI_SUPERUSER_USERNAME: postgres
+      PATRONI_SUPERUSER_PASSWORD: ${PG_SUPER_PASS}
+    volumes:
+      - pg1-data:/data/pg
+
+  pg-node-2:
+    image: patroni-distencoder:latest
+    environment:
+      PATRONI_NAME: pg2
+      PATRONI_ETCD_HOSTS: etcd:2379
+      PATRONI_POSTGRESQL_DATA_DIR: /data/pg
+      PATRONI_REPLICATION_USERNAME: replicator
+      PATRONI_REPLICATION_PASSWORD: ${REPL_PASS}
+      PATRONI_SUPERUSER_USERNAME: postgres
+      PATRONI_SUPERUSER_PASSWORD: ${PG_SUPER_PASS}
+    volumes:
+      - pg2-data:/data/pg
+
+  pgbouncer:
+    image: bitnami/pgbouncer:latest
+    ports:
+      - "6432:6432"
+    environment:
+      PGBOUNCER_DATABASE: distencoder
+      POSTGRESQL_HOST: pg-node-1
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USERNAME: distenc
+      POSTGRESQL_PASSWORD: ${DB_PASS}
+
+volumes:
+  etcd-data:
+  pg1-data:
+  pg2-data:
+```
+
+### 6.2 Controller Connection String for HA
+
+Point the Controller at pgBouncer instead of a single PostgreSQL instance:
+
+```bash
+DATABASE_URL=postgres://distenc:<password>@pgbouncer:6432/distencoder?sslmode=require
+```
+
+---
+
+## 7. Upgrades
+
+### 7.1 Controller Upgrade
+
+```bash
+# Pull new image
+docker compose pull controller
+
+# Rolling restart (zero downtime if behind a load balancer)
+docker compose up -d controller
+
+# Verify migrations applied
+docker compose logs controller | grep "migrations applied"
+```
+
+For bare-metal:
+
+```bash
+# Download new binary
+curl -Lo /usr/local/bin/distencoder.new \
+  https://releases.example.com/distencoder-controller-linux-amd64-vX.Y.Z
+chmod +x /usr/local/bin/distencoder.new
+
+# Swap and restart
+sudo systemctl stop distencoder
+mv /usr/local/bin/distencoder.new /usr/local/bin/distencoder
+sudo systemctl start distencoder
+```
+
+### 7.2 Agent Upgrade
+
+1. In the web UI, **drain** the agent (prevents new task assignment).
+2. Wait for any running task to complete.
+3. Stop the service: `C:\DistEncoder\distencoder-agent.exe stop`
+4. Replace the binary with the new version.
+5. Start the service: `C:\DistEncoder\distencoder-agent.exe start`
+6. Remove drain in the web UI.
+
+If the agent supports auto-update (configured in `agent.yaml`), the Controller pushes a new-version notification and the agent self-updates after finishing its current task.
+
+---
+
+## 8. Backups
+
+### 8.1 PostgreSQL
+
+```bash
+# Daily dump (run via cron on the controller host or a backup server)
+pg_dump -h <pg-host> -U distenc -Fc distencoder > /backups/distencoder-$(date +%Y%m%d).dump
+
+# Restore
+pg_restore -h <pg-host> -U distenc -d distencoder --clean /backups/distencoder-YYYYMMDD.dump
+```
+
+### 8.2 What to Back Up
+
+| Item | Location | Frequency |
+|---|---|---|
+| PostgreSQL database | Container volume or external DB | Daily (automated) |
+| TLS certificates | `certs/` directory | On change |
+| Controller config | `controller.yaml`, `.env` | On change |
+| Agent configs | `C:\DistEncoder\agent.yaml`, `.env` per agent | On change |
+| Encoding templates | Stored in DB (included in pg_dump) | — |
+| Global variables | Stored in DB (included in pg_dump) | — |
+| User accounts/sessions | Stored in DB (included in pg_dump) | — |
+| Task logs | Stored in DB `task_logs` table (included in pg_dump) | Pruned by retention policy |
+
+### 8.3 What NOT to Back Up
+
+- Agent `work/` directory — ephemeral, rebuilt per job.
+- Agent `offline.db` — synced to Controller on reconnect, then cleared.
+- Docker volumes for `pgdata` if you're already doing `pg_dump`.
+
+---
+
+## 9. Monitoring & Health Checks
+
+### 9.1 Controller Health
+
+```bash
+# HTTP health endpoint (uses RFC 9457 format on errors)
+curl http://<controller>:8080/api/v1/health
+# Expected: {"data":{"status":"ok","db":"connected","agents_online":3},"meta":{"request_id":"req-abc"}}
+
+# Prometheus metrics
+curl http://<controller>:8080/metrics
+
+# OpenAPI spec (machine-readable)
+curl http://<controller>:8080/api/v1/openapi.json
+
+# Swagger UI (admin only, must be enabled in config.yaml)
+# Open in browser: http://<controller>:8080/api/docs
+```
+
+### 9.2 Centralized Task Logs
+
+All task execution logs (stdout, stderr, agent-level events) are centralized on the controller — there is **no need to SSH into agents** to view encode output.
+
+**Web UI**: Navigate to **Jobs > Job Detail > Task**, and the built-in log viewer shows live and historical logs with stream/level filtering.
+
+**REST API**:
+```bash
+# Paginated task logs (cursor-based)
+curl http://<controller>:8080/api/v1/tasks/{id}/logs?stream=stderr&level=error&page_size=100
+
+# Live tail via SSE (connect and stream new lines as they arrive)
+curl -N http://<controller>:8080/api/v1/tasks/{id}/logs/tail
+
+# Download full log as .log file
+curl -O http://<controller>:8080/api/v1/tasks/{id}/logs/download
+```
+
+**Log retention** is configured in `config.yaml`:
+
+```yaml
+logging:
+  task_log_retention: 30d           # how long task logs are kept (default: 30 days)
+  task_log_cleanup_interval: 6h     # cleanup goroutine schedule
+  task_log_max_lines_per_job: 500000  # safety cap per job
+```
+
+Old logs are automatically purged by a background goroutine. The `task_logs` table is indexed by `(job_id, timestamp)` for fast queries.
+
+### 9.3 Scene Detection & Template Preview APIs
+
+Useful API endpoints for automation and debugging template/chunking issues:
+
+```bash
+# Get scene detection results for a source
+curl http://<controller>:8080/api/v1/sources/{id}/scenes
+
+# Compute chunk boundaries from scene data (dry-run, does not create a job)
+curl -X POST http://<controller>:8080/api/v1/sources/{id}/scenes/chunks \
+  -H "Content-Type: application/json" \
+  -d '{"min_merge": 500, "max_chunk": 15000}'
+
+# Preview a rendered template with sample data (used by template editor)
+curl -X POST http://<controller>:8080/api/v1/scripts/preview \
+  -H "Content-Type: application/json" \
+  -d '{"template_id": "<uuid>", "source_id": "<uuid>"}'
+
+# Preview a template for a specific chunk/scene
+curl -X POST http://<controller>:8080/api/v1/scripts/preview-chunk \
+  -H "Content-Type: application/json" \
+  -d '{"template_id": "<uuid>", "source_id": "<uuid>", "chunk_index": 0}'
+```
+
+These are useful for verifying that templates render correctly before submitting an encode job. The web UI's template editor and encode config page use these endpoints internally.
+
+### 9.4 Agent Health
+
+```powershell
+# Service status
+Get-Service DistEncoderAgent
+
+# Local health endpoint (if --http-debug enabled)
+Invoke-RestMethod http://localhost:9080/health
+```
+
+Note: Agent system-level logs (`log/slog` output) are still written locally to `C:\DistEncoder\logs\` and can be shipped to an external aggregator (Loki, ELK) for process-level diagnostics. Task execution logs go directly to the controller.
+
+### 9.5 Key Alerts to Configure
+
+| Alert | Condition | Severity |
+|---|---|---|
+| Agent offline | No heartbeat for > 2 minutes | Warning |
+| Job stuck | Job in `running` state for > expected duration * 2 | Warning |
+| Job failed | Any job enters `failed` state | Error |
+| DB connection lost | Controller cannot reach PostgreSQL | Critical |
+| Disk space low | Agent work directory < 10 GB free | Warning |
+| GPU error | nvidia-smi / encoder returns error during task | Error |
+
+---
+
+## 10. Troubleshooting
+
+### 10.1 Agent Cannot Connect to Controller
+
+**Symptoms**: Agent logs show `gRPC connection failed` or `TLS handshake error`.
+
+**Checks**:
+1. Verify the Controller is running: `docker compose ps` or `systemctl status distencoder`.
+2. Test network connectivity from agent: `Test-NetConnection <controller-ip> -Port 9443`.
+3. Verify certificates:
+   - Agent's `ca.crt` must match the CA that signed the Controller's `server.crt`.
+   - Check certificate expiry: `openssl x509 -in agent.crt -noout -dates`.
+   - Ensure the server cert SAN includes the hostname/IP the agent is connecting to.
+4. Check the agent's `controller.address` in `agent.yaml` matches the server cert CN/SAN.
+
+**Fix**: Regenerate certificates if expired. Ensure firewall rules allow port 9443 outbound from agent.
+
+### 10.2 Agent Shows Pending or Online but Gets No Tasks
+
+**Symptoms**: Agent appears in the web UI but never receives work.
+
+**Checks**:
+1. Verify the agent status is not **pending_approval** — an admin must approve new agents before they receive work (see §2.6).
+2. Verify the agent is not in **drained** state in the web UI.
+3. Check that queued jobs exist and match the agent's capabilities (e.g. a GPU-only job won't be sent to a CPU-only agent).
+4. Verify the agent's `allowed_shares` include the UNC path of the source file.
+5. Check Controller logs for scheduling errors.
+
+**Fix**: Approve the agent if pending. Un-drain if drained. Ensure agent capabilities match job requirements.
+
+### 10.3 Encode Fails Immediately
+
+**Symptoms**: Job status goes to `failed` within seconds of starting.
+
+**Checks**:
+1. **Check the centralized log viewer first** — in the web UI, go to **Jobs > Job Detail > Task** and open the log viewer. The `agent`-stream logs show pre-execution validation results, and any `error`-level entries explain exactly what failed (e.g. `"validation: required param DE_PARAM_INPUT_PATH is empty"`).
+2. Look at the job error message via API: `GET /api/v1/tasks/{id}/logs?level=error`.
+3. If the agent validated successfully but the script failed, check `stdout`/`stderr` streams in the log viewer for encoder output.
+4. Verify the UNC source path is accessible from the agent: `dir "\\NAS01\media\file.m2ts"`.
+5. Verify the encoder binary exists at the path specified in `agent.yaml` `tools:`.
+
+**Fix**: Correct template errors, tool paths, or UNC share permissions as indicated by the log viewer.
+
+### 10.4 All Tasks in a Job Fail with Script Errors
+
+**Symptoms**: Every task in a job fails with template rendering or script syntax errors.
+
+**Checks**:
+1. Open the **Template Editor** for the template used by the job. Check for Go `text/template` syntax errors (the editor validates on save).
+2. Click **Preview** in the template editor to render with sample data — if the preview fails, the template is broken.
+3. For scene-based jobs, verify scene detection completed successfully for the source: `GET /api/v1/sources/{id}/scenes`.
+4. Check that chunk scripts exist on the UNC share: `dir "\\NAS01\media\source_dir\chunks\"`.
+5. If scripts exist but contain bad content, the template rendered incorrectly. Use `POST /api/v1/scripts/preview-chunk` to debug specific chunks.
+
+**Fix**: Fix the template in the editor, use Preview to verify, then retry the job. If chunk scripts on the share are stale, the controller regenerates them on retry.
+
+### 10.5 Encode Fails Mid-Way
+
+**Symptoms**: Job fails after running for some time. Partial output file may exist.
+
+**Checks**:
+1. **Check the centralized log viewer** — open the task's log viewer and filter by `stderr` stream or `error` level to find the failure point. The `agent` stream shows GPU utilisation readings leading up to the failure.
+2. Download the full log via **Download .log** button (or `GET /api/v1/tasks/{id}/logs/download`) for offline analysis.
+3. Look for disk space issues: `Get-PSDrive C` or check the output share.
+4. For GPU encodes, check `nvidia-smi` for GPU errors or driver crashes.
+5. Check if the source file is intact: `ffprobe "\\NAS01\media\file.m2ts"`.
+
+**Fix**: Address disk space, GPU driver, or source file issues. Retry the job via the web UI.
+
+### 10.6 Offline Agent Does Not Sync After Reconnect
+
+**Symptoms**: Agent reconnects but offline results and logs are not appearing in the Controller.
+
+**Checks**:
+1. Check agent local system logs in `C:\DistEncoder\logs\` for `SyncOfflineResults` errors.
+2. Verify the `offline.db` file exists and is not corrupted:
+   ```powershell
+   # Check unsynced results
+   sqlite3 C:\DistEncoder\offline.db "SELECT count(*) FROM offline_results WHERE synced = 0;"
+   # Check buffered log lines
+   sqlite3 C:\DistEncoder\offline.db "SELECT count(*) FROM offline_logs WHERE synced = 0;"
+   ```
+3. Check Controller logs for sync stream errors.
+
+**Fix**: If the offline DB is corrupted, the results and buffered logs for that period are lost — delete `offline.db` and restart the agent. The jobs will remain in `running` state on the Controller and can be manually marked as failed and retried.
+
+### 10.7 Webhook Delivery Failures
+
+**Symptoms**: Notifications not arriving in Discord/Teams/Slack.
+
+**Checks**:
+1. Check webhook delivery log in the web UI (**Webhook Config > Delivery Log**) or via API (`GET /api/v1/webhooks/{id}/deliveries`).
+2. Look for HTTP response codes: 401 (bad token), 403 (permissions), 429 (rate limited).
+3. Test the webhook URL manually:
+   ```bash
+   curl -X POST <webhook-url> -H "Content-Type: application/json" \
+     -d '{"content":"test"}'
+   ```
+4. For Discord: ensure the webhook URL has not been rotated or deleted.
+5. For Teams: ensure the Incoming Webhook connector is still active on the channel.
+6. For Slack: ensure the app/bot has permission to post to the target channel.
+
+**Fix**: Update the webhook URL in the web UI. Use the **Test Fire** button to verify delivery.
+
+### 10.8 Database Connection Issues
+
+**Symptoms**: Controller logs show `database connection refused` or `too many connections`.
+
+**Checks**:
+1. Verify PostgreSQL is running: `docker compose ps postgres` or `systemctl status postgresql`.
+2. Check connection count: `SELECT count(*) FROM pg_stat_activity WHERE datname = 'distencoder';`
+3. Check PostgreSQL logs for connection limit errors.
+4. If using pgBouncer, verify pool settings.
+
+**Fix**: Increase `max_connections` in `postgresql.conf` or add pgBouncer for connection pooling. Restart PostgreSQL after config changes.
+
+---
+
+## 11. Prevention Tips
+
+- **Certificate expiry**: Set a calendar reminder 30 days before TLS certificate expiry. Consider automating renewal with a cron job.
+- **Disk space**: Monitor agent work directories and output shares. Set up alerts at 80% usage.
+- **Database bloat**: Schedule periodic `VACUUM ANALYZE` on the PostgreSQL database. The `task_logs` table can grow large — ensure `logging.task_log_retention` is set appropriately (default 30 days). The cleanup goroutine runs automatically.
+- **Task log monitoring**: If the `task_logs` table grows unexpectedly, check for jobs producing excessive output (e.g., verbose encoder logging). Reduce retention or increase `task_log_max_lines_per_job` as needed.
+- **Agent drift**: Keep all agents on the same binary version. Use the web UI to check agent versions and plan rolling upgrades.
+- **Agent approval**: When adding new agents to the farm, remember they start in `pending_approval` state. Check the Farm Servers page after deployment.
+- **Backup testing**: Periodically restore a database backup to a test instance to verify recoverability.
+- **Template changes**: Use the **Preview** feature in the template editor before saving edits. A bad template can cause all jobs to fail. The editor validates Go `text/template` syntax and highlights errors before saving.
+- **Scene detection**: Run scene detection before using scene-based chunking. If scene data is stale (source file changed), re-run the scan. Without scene data, the encode config page only offers fixed-size chunking.
+- **Chunk UNC paths**: After submitting an encode job, the controller writes per-chunk scripts to `\\NAS\...\chunks\chunk_NNN\` on the UNC share. Ensure the agent service account has read access to the `chunks\` subdirectory structure. If chunk scripts are missing or inaccessible, the agent's pre-execution validation will fail the task immediately — check the centralized log viewer for details.
+- **Share permissions**: After Windows updates or domain changes, verify that the agent service account still has access to UNC shares.
+- **API versioning**: The REST API is versioned at `/api/v1`. When upgrading the controller, check the changelog for breaking API changes. The OpenAPI spec at `/api/v1/openapi.json` is the source of truth for the current API surface.
+- **Session/OIDC expiry**: Session TTL defaults to 24h. OIDC tokens are refreshed automatically. If users report frequent logouts, check `auth.session_ttl` in `config.yaml`.
