@@ -13,6 +13,7 @@ import (
 	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
 
 	"github.com/badskater/distributed-encoder/internal/controller/config"
+	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -26,15 +27,17 @@ type Server struct {
 	cfg      *config.GRPCConfig
 	agentCfg *config.AgentConfig
 	logger   *slog.Logger
+	webhooks *webhooks.Service
 }
 
 // New creates a new gRPC Server.
-func New(store db.Store, grpcCfg *config.GRPCConfig, agentCfg *config.AgentConfig, logger *slog.Logger) *Server {
+func New(store db.Store, grpcCfg *config.GRPCConfig, agentCfg *config.AgentConfig, logger *slog.Logger, wh *webhooks.Service) *Server {
 	return &Server{
 		store:    store,
 		cfg:      grpcCfg,
 		agentCfg: agentCfg,
 		logger:   logger,
+		webhooks: wh,
 	}
 }
 

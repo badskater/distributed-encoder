@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 )
 
@@ -171,6 +172,11 @@ func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
 		return
 	}
+
+	s.webhooks.Emit(r.Context(), webhooks.Event{
+		Type:    "job.cancelled",
+		Payload: map[string]any{"job_id": id, "source_id": job.SourceID},
+	})
 
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
 }

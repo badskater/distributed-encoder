@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/badskater/distributed-encoder/internal/db"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // webhookResponse is the public representation of a webhook (no secret hash).
@@ -93,14 +92,8 @@ func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 		Events:   req.Events,
 	}
 	if req.Secret != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Secret), bcrypt.DefaultCost)
-		if err != nil {
-			s.logger.Error("hash webhook secret", "err", err)
-			writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
-			return
-		}
-		h := string(hash)
-		params.SecretHash = &h
+		s := req.Secret
+		params.SecretHash = &s
 	}
 
 	wh, err := s.store.CreateWebhook(r.Context(), params)

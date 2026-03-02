@@ -7,6 +7,7 @@ import (
 
 	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
 
+	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 )
 
@@ -57,6 +58,16 @@ func (s *Server) Register(ctx context.Context, req *pb.AgentInfo) (*pb.RegisterR
 		"hostname", agent.Hostname,
 		"approved", approved,
 	)
+
+	s.webhooks.Emit(ctx, webhooks.Event{
+		Type: "agent.registered",
+		Payload: map[string]any{
+			"agent_id":  agent.ID,
+			"agent_name": agent.Name,
+			"hostname":  agent.Hostname,
+			"approved":  approved,
+		},
+	})
 
 	return &pb.RegisterResponse{
 		Ok:       true,

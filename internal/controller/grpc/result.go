@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
 	"google.golang.org/grpc/codes"
@@ -107,5 +108,16 @@ func (s *Server) checkJobCompletion(ctx context.Context, jobID string) error {
 		slog.String("job_id", jobID),
 		slog.String("status", newStatus),
 	)
+
+	eventType := "job." + newStatus
+	s.webhooks.Emit(ctx, webhooks.Event{
+		Type: eventType,
+		Payload: map[string]any{
+			"job_id":          jobID,
+			"tasks_completed": job.TasksCompleted,
+			"tasks_failed":    job.TasksFailed,
+		},
+	})
+
 	return nil
 }

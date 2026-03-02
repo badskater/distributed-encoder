@@ -10,25 +10,28 @@ import (
 
 	"github.com/badskater/distributed-encoder/internal/controller/auth"
 	"github.com/badskater/distributed-encoder/internal/controller/config"
+	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 )
 
 // Server is the HTTP API server.
 type Server struct {
-	httpSrv *http.Server
-	store   db.Store
-	auth    *auth.Service
-	cfg     *config.Config
-	logger  *slog.Logger
+	httpSrv  *http.Server
+	store    db.Store
+	auth     *auth.Service
+	cfg      *config.Config
+	logger   *slog.Logger
+	webhooks *webhooks.Service
 }
 
 // New creates and configures a new HTTP API server.
-func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog.Logger) *Server {
+func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog.Logger, wh *webhooks.Service) *Server {
 	s := &Server{
-		store:  store,
-		auth:   authSvc,
-		cfg:    cfg,
-		logger: logger,
+		store:    store,
+		auth:     authSvc,
+		cfg:      cfg,
+		logger:   logger,
+		webhooks: wh,
 	}
 
 	mux := http.NewServeMux()
