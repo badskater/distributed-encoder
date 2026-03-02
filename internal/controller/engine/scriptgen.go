@@ -36,6 +36,36 @@ var templateFuncs = template.FuncMap{
 	"escapeBat": escapeBat,
 	"uncPath":   uncPath,
 	"basename":  func(s string) string { return filepath.Base(s) },
+	"default": func(dflt, val string) string {
+		if val == "" {
+			return dflt
+		}
+		return val
+	},
+	"split": func(sep, s string) []string {
+		return strings.Split(s, sep)
+	},
+	"join": func(sep string, elems []string) string {
+		return strings.Join(elems, sep)
+	},
+	"trimAvs": func(start, end int) string {
+		return fmt.Sprintf("Trim(%d, %d)", start, end)
+	},
+	"trimVpy": func(start, end int) string {
+		return fmt.Sprintf("[%d:%d]", start, end)
+	},
+	"gpuFlag": func(vendor string) string {
+		switch strings.ToLower(vendor) {
+		case "nvidia":
+			return "--hwaccel nvenc --hwaccel_output_format cuda"
+		case "amd":
+			return "--hwaccel amf"
+		case "intel":
+			return "--hwaccel qsv"
+		default:
+			return ""
+		}
+	},
 }
 
 // escapeBat escapes characters that are special in Windows .bat files by
@@ -98,6 +128,7 @@ func (g *ScriptGenerator) Render(ctx context.Context, job *db.Job, task *db.Task
 	data["CHUNK_INDEX"] = strconv.Itoa(task.ChunkIndex)
 	data["JOB_ID"] = job.ID
 	data["TASK_ID"] = task.ID
+	data["TOTAL_CHUNKS"] = strconv.Itoa(len(job.EncodeConfig.ChunkBoundaries))
 
 	// 3. Create the output directory.
 	dir := filepath.Join(g.baseDir, job.ID, fmt.Sprintf("%04d", task.ChunkIndex))
