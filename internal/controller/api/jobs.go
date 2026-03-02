@@ -60,10 +60,11 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 // handleCreateJob creates a new encoding or analysis job.
 func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SourceID   string   `json:"source_id"`
-		JobType    string   `json:"job_type"`
-		Priority   int      `json:"priority"`
-		TargetTags []string `json:"target_tags"`
+		SourceID     string          `json:"source_id"`
+		JobType      string          `json:"job_type"`
+		Priority     int             `json:"priority"`
+		TargetTags   []string        `json:"target_tags"`
+		EncodeConfig db.EncodeConfig `json:"encode_config"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
@@ -74,16 +75,27 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "source_id is required")
 		return
 	}
-	if req.JobType != "encode" && req.JobType != "analysis" {
-		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "job_type must be \"encode\" or \"analysis\"")
+	if req.JobType != "encode" && req.JobType != "analysis" && req.JobType != "audio" {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "job_type must be \"encode\", \"analysis\", or \"audio\"")
 		return
+	}
+	if req.JobType == "encode" {
+		if req.EncodeConfig.RunScriptTemplateID == "" {
+			writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "encode_config.run_script_template_id is required for encode jobs")
+			return
+		}
+		if len(req.EncodeConfig.ChunkBoundaries) == 0 {
+			writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "encode_config.chunk_boundaries must not be empty for encode jobs")
+			return
+		}
 	}
 
 	job, err := s.store.CreateJob(r.Context(), db.CreateJobParams{
-		SourceID:   req.SourceID,
-		JobType:    req.JobType,
-		Priority:   req.Priority,
-		TargetTags: req.TargetTags,
+		SourceID:     req.SourceID,
+		JobType:      req.JobType,
+		Priority:     req.Priority,
+		TargetTags:   req.TargetTags,
+		EncodeConfig: req.EncodeConfig,
 	})
 	if err != nil {
 		s.logger.Error("create job", "err", err)

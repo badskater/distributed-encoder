@@ -12,6 +12,7 @@ import (
 	"github.com/badskater/distributed-encoder/internal/controller/api"
 	"github.com/badskater/distributed-encoder/internal/controller/auth"
 	"github.com/badskater/distributed-encoder/internal/controller/config"
+	"github.com/badskater/distributed-encoder/internal/controller/engine"
 	controllergrpc "github.com/badskater/distributed-encoder/internal/controller/grpc"
 	"github.com/badskater/distributed-encoder/internal/db"
 	"github.com/spf13/cobra"
@@ -95,6 +96,18 @@ func runServer(ctx context.Context, cfgPath string) error {
 		logger.Info("starting gRPC server", "addr", fmt.Sprintf("%s:%d", cfg.GRPC.Host, cfg.GRPC.Port))
 		grpcErrCh <- grpcSrv.Serve(ctx)
 	}()
+
+	// Start core engine (job expansion + stale agent detection).
+	eng := engine.New(store, engine.Config{
+		DispatchInterval: cfg.Agent.DispatchInterval,
+		StaleThreshold:   cfg.Agent.HeartbeatTimeout,
+		ScriptBaseDir:    cfg.Agent.ScriptBaseDir,
+	}, logger)
+	eng.Start(ctx)
+	logger.Info("core engine started",
+		"dispatch_interval", cfg.Agent.DispatchInterval,
+		"stale_threshold", cfg.Agent.HeartbeatTimeout,
+	)
 
 	// Block until a signal or any server error.
 	select {

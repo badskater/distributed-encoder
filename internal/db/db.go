@@ -38,6 +38,7 @@ type Store interface {
 	UpdateAgentStatus(ctx context.Context, id, status string) error
 	UpdateAgentHeartbeat(ctx context.Context, p UpdateAgentHeartbeatParams) error
 	SetAgentAPIKey(ctx context.Context, id, hash string) error
+	MarkStaleAgents(ctx context.Context, olderThan time.Duration) (int64, error)
 
 	// --- Sources ---
 	CreateSource(ctx context.Context, p CreateSourceParams) (*Source, error)
@@ -54,6 +55,7 @@ type Store interface {
 	ListJobs(ctx context.Context, filter ListJobsFilter) ([]*Job, int64, error)
 	UpdateJobStatus(ctx context.Context, id, status string) error
 	UpdateJobTaskCounts(ctx context.Context, id string) error
+	GetJobsNeedingExpansion(ctx context.Context) ([]*Job, error)
 
 	// --- Tasks ---
 	CreateTask(ctx context.Context, p CreateTaskParams) (*Task, error)
@@ -61,6 +63,7 @@ type Store interface {
 	ListTasksByJob(ctx context.Context, jobID string) ([]*Task, error)
 	ClaimNextTask(ctx context.Context, agentID string, tags []string) (*Task, error)
 	UpdateTaskStatus(ctx context.Context, id, status string) error
+	SetTaskScriptDir(ctx context.Context, id, scriptDir string) error
 	CompleteTask(ctx context.Context, p CompleteTaskParams) error
 	FailTask(ctx context.Context, id string, exitCode int, errMsg string) error
 	CancelPendingTasksForJob(ctx context.Context, jobID string) error

@@ -2,6 +2,23 @@ package db
 
 import "time"
 
+// EncodeConfig holds the job-level configuration used to expand a queued job
+// into individual tasks and to generate per-task script files.
+type EncodeConfig struct {
+	RunScriptTemplateID   string            `json:"run_script_template_id"`
+	FrameserverTemplateID string            `json:"frameserver_template_id,omitempty"`
+	ChunkBoundaries       []ChunkBoundary   `json:"chunk_boundaries"`
+	OutputRoot            string            `json:"output_root"`
+	OutputExtension       string            `json:"output_extension,omitempty"` // default "mkv"
+	ExtraVars             map[string]string `json:"extra_vars,omitempty"`
+}
+
+// ChunkBoundary defines the inclusive frame range for one encoding task.
+type ChunkBoundary struct {
+	StartFrame int `json:"start_frame"`
+	EndFrame   int `json:"end_frame"`
+}
+
 // The model types here mirror the database rows returned by queries.
 // They are separate from the shared domain types (internal/shared) so the
 // DB layer can be tested and evolved independently.
@@ -68,6 +85,7 @@ type Job struct {
 	TasksRunning   int
 	TasksCompleted int
 	TasksFailed    int
+	EncodeConfig   EncodeConfig
 	CompletedAt    *time.Time
 	FailedAt       *time.Time
 	CreatedAt      time.Time
@@ -215,10 +233,11 @@ type ListSourcesFilter struct {
 }
 
 type CreateJobParams struct {
-	SourceID   string
-	JobType    string
-	Priority   int
-	TargetTags []string
+	SourceID     string
+	JobType      string
+	Priority     int
+	TargetTags   []string
+	EncodeConfig EncodeConfig
 }
 
 type ListJobsFilter struct {

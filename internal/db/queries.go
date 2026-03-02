@@ -220,6 +220,19 @@ func (s *pgStore) SetAgentAPIKey(ctx context.Context, id, hash string) error {
 	return err
 }
 
+// MarkStaleAgents sets the status of agents whose last_heartbeat is older than
+// olderThan to 'offline'. Returns the number of agents updated.
+func (s *pgStore) MarkStaleAgents(ctx context.Context, olderThan time.Duration) (int64, error) {
+	const q = `UPDATE agents SET status = 'offline', updated_at = now()
+	           WHERE status IN ('idle', 'busy')
+	             AND last_heartbeat < now() - $1::interval`
+	ct, err := s.pool.Exec(ctx, q, olderThan.String())
+	if err != nil {
+		return 0, fmt.Errorf("db: mark stale agents: %w", err)
+	}
+	return ct.RowsAffected(), nil
+}
+
 func scanAgent(row pgx.Row) (*Agent, error) {
 	var a Agent
 	err := row.Scan(
@@ -371,20 +384,24 @@ func scanSource(row pgx.Row) (*Source, error) {
 // ---------------------------------------------------------------------------
 
 func (s *pgStore) CreateJob(ctx context.Context, p CreateJobParams) (*Job, error) {
+	cfgJSON, err := json.Marshal(p.EncodeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("db: marshal encode_config: %w", err)
+	}
 	const q = `
-		INSERT INTO jobs (source_id, job_type, priority, target_tags)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO jobs (source_id, job_type, priority, target_tags, encode_config)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, source_id, status, job_type, priority, target_tags,
 		          tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
-		          completed_at, failed_at, created_at, updated_at`
-	row := s.pool.QueryRow(ctx, q, p.SourceID, p.JobType, p.Priority, p.TargetTags)
+		          encode_config, completed_at, failed_at, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, p.SourceID, p.JobType, p.Priority, p.TargetTags, cfgJSON)
 	return scanJob(row)
 }
 
 func (s *pgStore) GetJobByID(ctx context.Context, id string) (*Job, error) {
 	const q = `SELECT id, source_id, status, job_type, priority, target_tags,
 	                  tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
-	                  completed_at, failed_at, created_at, updated_at
+	                  encode_config, completed_at, failed_at, created_at, updated_at
 	           FROM jobs WHERE id = $1`
 	return scanJob(s.pool.QueryRow(ctx, q, id))
 }
@@ -408,7 +425,7 @@ func (s *pgStore) ListJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64
 
 	q := `SELECT id, source_id, status, job_type, priority, target_tags,
 	             tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
-	             completed_at, failed_at, created_at, updated_at FROM jobs`
+	             encode_config, completed_at, failed_at, created_at, updated_at FROM jobs`
 	args := []any{}
 	argN := 1
 
@@ -443,6 +460,31 @@ func (s *pgStore) ListJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64
 		out = append(out, j)
 	}
 	return out, total, rows.Err()
+}
+
+// GetJobsNeedingExpansion returns queued jobs that have not yet been expanded
+// into tasks (tasks_total = 0) and have a non-empty encode_config.
+func (s *pgStore) GetJobsNeedingExpansion(ctx context.Context) ([]*Job, error) {
+	const q = `SELECT id, source_id, status, job_type, priority, target_tags,
+	                  tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
+	                  encode_config, completed_at, failed_at, created_at, updated_at
+	           FROM jobs
+	           WHERE status = 'queued' AND tasks_total = 0
+	           ORDER BY priority DESC, created_at ASC`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: get jobs needing expansion: %w", err)
+	}
+	defer rows.Close()
+	var out []*Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
 }
 
 func (s *pgStore) UpdateJobStatus(ctx context.Context, id, status string) error {
@@ -483,16 +525,22 @@ func (s *pgStore) UpdateJobTaskCounts(ctx context.Context, id string) error {
 
 func scanJob(row pgx.Row) (*Job, error) {
 	var j Job
+	var rawCfg []byte
 	err := row.Scan(
 		&j.ID, &j.SourceID, &j.Status, &j.JobType, &j.Priority, &j.TargetTags,
 		&j.TasksTotal, &j.TasksPending, &j.TasksRunning, &j.TasksCompleted, &j.TasksFailed,
-		&j.CompletedAt, &j.FailedAt, &j.CreatedAt, &j.UpdatedAt,
+		&rawCfg, &j.CompletedAt, &j.FailedAt, &j.CreatedAt, &j.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("db: scan job: %w", err)
+	}
+	if len(rawCfg) > 0 {
+		if err := json.Unmarshal(rawCfg, &j.EncodeConfig); err != nil {
+			return nil, fmt.Errorf("db: unmarshal encode_config: %w", err)
+		}
 	}
 	return &j, nil
 }
@@ -595,6 +643,18 @@ func (s *pgStore) UpdateTaskStatus(ctx context.Context, id, status string) error
 	ct, err := s.pool.Exec(ctx, q, id, status)
 	if err != nil {
 		return fmt.Errorf("db: update task status: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *pgStore) SetTaskScriptDir(ctx context.Context, id, scriptDir string) error {
+	const q = `UPDATE tasks SET script_dir = $2, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id, scriptDir)
+	if err != nil {
+		return fmt.Errorf("db: set task script_dir: %w", err)
 	}
 	if ct.RowsAffected() == 0 {
 		return ErrNotFound
