@@ -52,6 +52,23 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, det
 	_ = json.NewEncoder(w).Encode(p)
 }
 
+// writeCollection serialises a paginated collection response.
+// nextCursor is the opaque cursor for the next page; empty string means no further pages.
+func writeCollection(w http.ResponseWriter, r *http.Request, data any, totalCount int64, nextCursor string) {
+	reqID := r.Header.Get(requestIDHeader)
+	meta := map[string]any{
+		"request_id":  reqID,
+		"total_count": totalCount,
+	}
+	if nextCursor != "" {
+		meta["next_cursor"] = nextCursor
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Total-Count", fmt.Sprintf("%d", totalCount))
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(envelope{Data: data, Meta: meta})
+}
+
 func problemSlug(status int) string {
 	switch status {
 	case http.StatusUnauthorized:

@@ -69,6 +69,73 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /auth/oidc", s.handleOIDCRedirect)
 	mux.HandleFunc("GET /auth/oidc/callback", s.handleOIDCCallback)
+
+	viewer := func(h http.HandlerFunc) http.Handler {
+		return s.auth.Middleware(auth.RequireRole("viewer", h))
+	}
+	operator := func(h http.HandlerFunc) http.Handler {
+		return s.auth.Middleware(auth.RequireRole("operator", h))
+	}
+	admin := func(h http.HandlerFunc) http.Handler {
+		return s.auth.Middleware(auth.RequireRole("admin", h))
+	}
+
+	// --- Jobs ---
+	mux.Handle("GET /api/v1/jobs", viewer(s.handleListJobs))
+	mux.Handle("POST /api/v1/jobs", operator(s.handleCreateJob))
+	mux.Handle("GET /api/v1/jobs/{id}", viewer(s.handleGetJob))
+	mux.Handle("POST /api/v1/jobs/{id}/cancel", operator(s.handleCancelJob))
+	mux.Handle("POST /api/v1/jobs/{id}/retry", operator(s.handleRetryJob))
+	mux.Handle("GET /api/v1/jobs/{id}/logs", viewer(s.handleListJobLogs))
+
+	// --- Tasks ---
+	mux.Handle("GET /api/v1/tasks/{id}", viewer(s.handleGetTask))
+	mux.Handle("GET /api/v1/tasks/{id}/logs", viewer(s.handleListTaskLogs))
+	mux.Handle("GET /api/v1/tasks/{id}/logs/tail", viewer(s.handleTailTaskLogs))
+	mux.Handle("GET /api/v1/tasks/{id}/logs/download", operator(s.handleDownloadTaskLogs))
+
+	// --- Agents ---
+	mux.Handle("GET /api/v1/agents", viewer(s.handleListAgents))
+	mux.Handle("GET /api/v1/agents/{id}", viewer(s.handleGetAgent))
+	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
+
+	// --- Sources ---
+	mux.Handle("GET /api/v1/sources", viewer(s.handleListSources))
+	mux.Handle("GET /api/v1/sources/{id}", viewer(s.handleGetSource))
+	mux.Handle("POST /api/v1/sources/{id}/encode", operator(s.handleEncodeSource))
+	mux.Handle("DELETE /api/v1/sources/{id}", operator(s.handleDeleteSource))
+
+	// --- Analysis ---
+	mux.Handle("POST /api/v1/analysis/scan", operator(s.handleScanAnalysis))
+	mux.Handle("GET /api/v1/analysis/{source_id}", viewer(s.handleGetAnalysisResult))
+	mux.Handle("GET /api/v1/analysis/{source_id}/all", viewer(s.handleListAnalysisResults))
+
+	// --- Templates ---
+	mux.Handle("GET /api/v1/templates", viewer(s.handleListTemplates))
+	mux.Handle("GET /api/v1/templates/{id}", viewer(s.handleGetTemplate))
+	mux.Handle("POST /api/v1/templates", admin(s.handleCreateTemplate))
+	mux.Handle("PUT /api/v1/templates/{id}", admin(s.handleUpdateTemplate))
+	mux.Handle("DELETE /api/v1/templates/{id}", admin(s.handleDeleteTemplate))
+
+	// --- Variables ---
+	mux.Handle("GET /api/v1/variables", viewer(s.handleListVariables))
+	mux.Handle("GET /api/v1/variables/{name}", viewer(s.handleGetVariable))
+	mux.Handle("PUT /api/v1/variables/{name}", admin(s.handleUpsertVariable))
+	mux.Handle("DELETE /api/v1/variables/{id}", admin(s.handleDeleteVariable))
+
+	// --- Webhooks ---
+	mux.Handle("GET /api/v1/webhooks", admin(s.handleListWebhooks))
+	mux.Handle("GET /api/v1/webhooks/{id}", admin(s.handleGetWebhook))
+	mux.Handle("POST /api/v1/webhooks", admin(s.handleCreateWebhook))
+	mux.Handle("PUT /api/v1/webhooks/{id}", admin(s.handleUpdateWebhook))
+	mux.Handle("DELETE /api/v1/webhooks/{id}", admin(s.handleDeleteWebhook))
+	mux.Handle("POST /api/v1/webhooks/{id}/test", admin(s.handleTestWebhook))
+
+	// --- Users ---
+	mux.Handle("GET /api/v1/users", admin(s.handleListUsers))
+	mux.Handle("POST /api/v1/users", admin(s.handleCreateUser))
+	mux.Handle("DELETE /api/v1/users/{id}", admin(s.handleDeleteUser))
+	mux.Handle("PUT /api/v1/users/{id}/role", admin(s.handleUpdateUserRole))
 }
 
 // requestIDMiddleware injects a correlation ID into each request and response.
