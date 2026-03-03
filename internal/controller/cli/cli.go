@@ -915,7 +915,7 @@ func newWebhookAddCmd(ctx context.Context) *cobra.Command {
 				Events:   eventList,
 			}
 			if secret != "" {
-				params.SecretHash = &secret
+				params.Secret = &secret
 			}
 			store, close, err := openStore(ctx, cfgFile)
 			if err != nil {

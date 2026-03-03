@@ -10,6 +10,9 @@ import (
 	"github.com/badskater/distributed-encoder/internal/db"
 )
 
+// timeStr formats a time as RFC3339 UTC.
+func timeStr(t time.Time) string { return t.UTC().Format(time.RFC3339) }
+
 // webhookResponse is the public representation of a webhook (no secret hash).
 type webhookResponse struct {
 	ID        string   `json:"id"`
@@ -30,8 +33,8 @@ func toWebhookResponse(wh *db.Webhook) webhookResponse {
 		URL:       wh.URL,
 		Events:    wh.Events,
 		Enabled:   wh.Enabled,
-		CreatedAt: wh.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt: wh.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt: timeStr(wh.CreatedAt),
+		UpdatedAt: timeStr(wh.UpdatedAt),
 	}
 }
 
@@ -93,7 +96,7 @@ func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Secret != "" {
 		s := req.Secret
-		params.SecretHash = &s
+		params.Secret = &s
 	}
 
 	wh, err := s.store.CreateWebhook(r.Context(), params)

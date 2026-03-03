@@ -155,15 +155,15 @@ type Variable struct {
 
 // Webhook is a row from the webhooks table.
 type Webhook struct {
-	ID         string
-	Name       string
-	Provider   string
-	URL        string
-	SecretHash *string
-	Events     []string
-	Enabled    bool
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID        string
+	Name      string
+	Provider  string
+	URL       string
+	Secret    *string // raw HMAC-SHA256 signing key; nil means no signing
+	Events    []string
+	Enabled   bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // AnalysisResult is a row from the analysis_results table.
@@ -182,6 +182,17 @@ type Session struct {
 	UserID    string
 	CreatedAt time.Time
 	ExpiresAt time.Time
+}
+
+// EnrollmentToken is a row from the enrollment_tokens table.
+type EnrollmentToken struct {
+	ID        string
+	Token     string
+	CreatedBy string
+	UsedBy    *string
+	UsedAt    *time.Time
+	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 // ---------------------------------------------------------------------------
@@ -306,11 +317,11 @@ type UpsertVariableParams struct {
 }
 
 type CreateWebhookParams struct {
-	Name       string
-	Provider   string
-	URL        string
-	SecretHash *string
-	Events     []string
+	Name     string
+	Provider string
+	URL      string
+	Secret   *string // raw HMAC-SHA256 signing key
+	Events   []string
 }
 
 type UpdateWebhookParams struct {
@@ -349,4 +360,15 @@ type ListJobLogsParams struct {
 	Stream   string
 	Cursor   int64
 	PageSize int
+}
+
+type CreateEnrollmentTokenParams struct {
+	Token     string
+	CreatedBy string
+	ExpiresAt time.Time
+}
+
+type ConsumeEnrollmentTokenParams struct {
+	Token   string
+	AgentID string
 }

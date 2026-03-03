@@ -106,6 +106,14 @@ type Store interface {
 	DeleteSession(ctx context.Context, token string) error
 	PruneExpiredSessions(ctx context.Context) error
 
+	// --- Enrollment Tokens ---
+	CreateEnrollmentToken(ctx context.Context, p CreateEnrollmentTokenParams) (*EnrollmentToken, error)
+	GetEnrollmentToken(ctx context.Context, token string) (*EnrollmentToken, error)
+	ConsumeEnrollmentToken(ctx context.Context, p ConsumeEnrollmentTokenParams) error
+	ListEnrollmentTokens(ctx context.Context) ([]*EnrollmentToken, error)
+	DeleteEnrollmentToken(ctx context.Context, id string) error
+	PruneExpiredEnrollmentTokens(ctx context.Context) error
+
 	// --- Extended queries ---
 	RetryFailedTasksForJob(ctx context.Context, jobID string) error
 	ListJobLogs(ctx context.Context, p ListJobLogsParams) ([]*TaskLog, error)

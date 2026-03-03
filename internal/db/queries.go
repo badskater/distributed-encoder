@@ -985,7 +985,7 @@ func (s *pgStore) CreateWebhook(ctx context.Context, p CreateWebhookParams) (*We
 		INSERT INTO webhooks (name, provider, url, secret_hash, events)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, name, provider, url, secret_hash, events, enabled, created_at, updated_at`
-	row := s.pool.QueryRow(ctx, q, p.Name, p.Provider, p.URL, p.SecretHash, p.Events)
+	row := s.pool.QueryRow(ctx, q, p.Name, p.Provider, p.URL, p.Secret, p.Events)
 	return scanWebhook(row)
 }
 
@@ -1055,7 +1055,7 @@ func (s *pgStore) InsertWebhookDelivery(ctx context.Context, p InsertWebhookDeli
 
 func scanWebhook(row pgx.Row) (*Webhook, error) {
 	var w Webhook
-	err := row.Scan(&w.ID, &w.Name, &w.Provider, &w.URL, &w.SecretHash,
+	err := row.Scan(&w.ID, &w.Name, &w.Provider, &w.URL, &w.Secret,
 		&w.Events, &w.Enabled, &w.CreatedAt, &w.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -1172,6 +1172,93 @@ func scanSession(row pgx.Row) (*Session, error) {
 		return nil, fmt.Errorf("db: scan session: %w", err)
 	}
 	return &sess, nil
+}
+
+// ---------------------------------------------------------------------------
+// Enrollment Tokens
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateEnrollmentToken(ctx context.Context, p CreateEnrollmentTokenParams) (*EnrollmentToken, error) {
+	const q = `
+		INSERT INTO enrollment_tokens (token, created_by, expires_at)
+		VALUES ($1, $2, $3)
+		RETURNING id, token, created_by, used_by, used_at, expires_at, created_at`
+	row := s.pool.QueryRow(ctx, q, p.Token, p.CreatedBy, p.ExpiresAt)
+	return scanEnrollmentToken(row)
+}
+
+func (s *pgStore) GetEnrollmentToken(ctx context.Context, token string) (*EnrollmentToken, error) {
+	const q = `SELECT id, token, created_by, used_by, used_at, expires_at, created_at
+	           FROM enrollment_tokens
+	           WHERE token = $1 AND expires_at > now() AND used_at IS NULL`
+	return scanEnrollmentToken(s.pool.QueryRow(ctx, q, token))
+}
+
+func (s *pgStore) ConsumeEnrollmentToken(ctx context.Context, p ConsumeEnrollmentTokenParams) error {
+	const q = `UPDATE enrollment_tokens
+	           SET used_by = $2, used_at = now()
+	           WHERE token = $1 AND used_at IS NULL AND expires_at > now()`
+	ct, err := s.pool.Exec(ctx, q, p.Token, p.AgentID)
+	if err != nil {
+		return fmt.Errorf("db: consume enrollment token: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *pgStore) ListEnrollmentTokens(ctx context.Context) ([]*EnrollmentToken, error) {
+	const q = `SELECT id, token, created_by, used_by, used_at, expires_at, created_at
+	           FROM enrollment_tokens ORDER BY created_at DESC`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list enrollment tokens: %w", err)
+	}
+	defer rows.Close()
+	var out []*EnrollmentToken
+	for rows.Next() {
+		t, err := scanEnrollmentToken(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) DeleteEnrollmentToken(ctx context.Context, id string) error {
+	const q = `DELETE FROM enrollment_tokens WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: delete enrollment token: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *pgStore) PruneExpiredEnrollmentTokens(ctx context.Context) error {
+	const q = `DELETE FROM enrollment_tokens WHERE expires_at <= now()`
+	_, err := s.pool.Exec(ctx, q)
+	return err
+}
+
+func scanEnrollmentToken(row pgx.Row) (*EnrollmentToken, error) {
+	var t EnrollmentToken
+	err := row.Scan(
+		&t.ID, &t.Token, &t.CreatedBy,
+		&t.UsedBy, &t.UsedAt,
+		&t.ExpiresAt, &t.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan enrollment token: %w", err)
+	}
+	return &t, nil
 }
 
 // ---------------------------------------------------------------------------

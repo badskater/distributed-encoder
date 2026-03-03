@@ -116,8 +116,8 @@ func (s *sender) attempt(ctx context.Context, client *http.Client, wh *db.Webhoo
 	req.Header.Set("User-Agent", "DistEncoder-Webhooks/1.0")
 
 	// Sign the payload with HMAC-SHA256 if a secret is configured.
-	if wh.SecretHash != nil && *wh.SecretHash != "" {
-		sig := computeHMAC(payload, *wh.SecretHash)
+	if wh.Secret != nil && *wh.Secret != "" {
+		sig := computeHMAC(payload, *wh.Secret)
 		req.Header.Set("X-Signature", "sha256="+sig)
 	}
 

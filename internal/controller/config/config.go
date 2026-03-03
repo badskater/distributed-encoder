@@ -17,13 +17,15 @@ type Config struct {
 	Agent    AgentConfig    `mapstructure:"agent"`
 	Webhooks WebhooksConfig `mapstructure:"webhooks"`
 	TLS      TLSConfig      `mapstructure:"tls"`
+	Upgrade  UpgradeConfig  `mapstructure:"upgrade"`
 }
 
 type ServerConfig struct {
-	Host         string        `mapstructure:"host"`
-	Port         int           `mapstructure:"port"`
-	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout time.Duration `mapstructure:"write_timeout"`
+	Host           string        `mapstructure:"host"`
+	Port           int           `mapstructure:"port"`
+	ReadTimeout    time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout   time.Duration `mapstructure:"write_timeout"`
+	AllowedOrigins []string      `mapstructure:"allowed_origins"`
 }
 
 type DatabaseConfig struct {
@@ -82,6 +84,15 @@ type TLSConfig struct {
 	CAFile   string `mapstructure:"ca"`
 }
 
+type UpgradeConfig struct {
+	// BinDir is the directory containing agent binaries.
+	// Files should be named: agent-{os}-{arch}[.exe]
+	// e.g. agent-windows-amd64.exe, agent-linux-amd64
+	BinDir  string `mapstructure:"bin_dir"`
+	// Version is the current agent version string, e.g. "1.2.3"
+	Version string `mapstructure:"version"`
+}
+
 // Load reads the YAML config file at path and returns a populated Config.
 func Load(path string) (*Config, error) {
 	v := viper.New()
@@ -106,6 +117,8 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("webhooks.worker_count", 4)
 	v.SetDefault("webhooks.delivery_timeout", "10s")
 	v.SetDefault("webhooks.max_retries", 3)
+	v.SetDefault("upgrade.bin_dir", "/var/lib/distributed-encoder/agent-bins")
+	v.SetDefault("upgrade.version", "0.0.0")
 
 	v.AutomaticEnv()
 

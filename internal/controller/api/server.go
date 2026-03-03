@@ -22,6 +22,7 @@ type Server struct {
 	cfg      *config.Config
 	logger   *slog.Logger
 	webhooks *webhooks.Service
+	hub      *Hub
 }
 
 // New creates and configures a new HTTP API server.
@@ -32,14 +33,25 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 		cfg:      cfg,
 		logger:   logger,
 		webhooks: wh,
+		hub:      NewHub(logger),
 	}
 
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
+	// Middleware chain (outermost → innermost):
+	//   requestID → CORS → rate-limit → ETag → mux
+	handler := s.requestIDMiddleware(
+		corsMiddleware(cfg.Server.AllowedOrigins,
+			rateLimitMiddleware(
+				etagMiddleware(mux),
+			),
+		),
+	)
+
 	s.httpSrv = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:      s.requestIDMiddleware(mux),
+		Handler:      handler,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
@@ -48,6 +60,9 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 
 // Serve starts listening and blocks until ctx is cancelled or a fatal error occurs.
 func (s *Server) Serve(ctx context.Context) error {
+	// Start WebSocket hub broadcast loop.
+	go s.hub.Run(ctx)
+
 	errCh := make(chan error, 1)
 	go func() {
 		if err := s.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -66,12 +81,20 @@ func (s *Server) Serve(ctx context.Context) error {
 func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Unauthenticated
 	mux.HandleFunc("GET /health", s.handleHealth)
+	mux.HandleFunc("GET /api/v1/openapi.json", s.handleOpenAPISpec)
 
 	// Auth endpoints (no session required)
 	mux.HandleFunc("POST /auth/login", s.handleLogin)
 	mux.HandleFunc("POST /auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /auth/oidc", s.handleOIDCRedirect)
 	mux.HandleFunc("GET /auth/oidc/callback", s.handleOIDCCallback)
+
+	// Agent enrollment — uses one-time token, no session
+	mux.HandleFunc("POST /api/v1/agent/enroll", s.handleAgentEnroll)
+
+	// Agent upgrade — no session required (agents use API key, not session)
+	mux.HandleFunc("GET /api/v1/agent/upgrade/check", s.handleAgentUpgradeCheck)
+	mux.HandleFunc("GET /api/v1/agent/upgrade/{os}/{arch}", s.handleAgentUpgradeDownload)
 
 	viewer := func(h http.HandlerFunc) http.Handler {
 		return s.auth.Middleware(auth.RequireRole("viewer", h))
@@ -82,6 +105,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	admin := func(h http.HandlerFunc) http.Handler {
 		return s.auth.Middleware(auth.RequireRole("admin", h))
 	}
+
+	// --- WebSocket live events ---
+	mux.Handle("GET /api/v1/ws", viewer(s.hub.ServeWS))
 
 	// --- Jobs ---
 	mux.Handle("GET /api/v1/jobs", viewer(s.handleListJobs))
@@ -101,6 +127,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/agents", viewer(s.handleListAgents))
 	mux.Handle("GET /api/v1/agents/{id}", viewer(s.handleGetAgent))
 	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
+
+	// --- Agent enrollment tokens ---
+	mux.Handle("GET /api/v1/agent-tokens", admin(s.handleListEnrollmentTokens))
+	mux.Handle("POST /api/v1/agent-tokens", admin(s.handleCreateEnrollmentToken))
+	mux.Handle("DELETE /api/v1/agent-tokens/{id}", admin(s.handleDeleteEnrollmentToken))
 
 	// --- Sources ---
 	mux.Handle("GET /api/v1/sources", viewer(s.handleListSources))

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/badskater/distributed-encoder/internal/controller/auth"
 	"github.com/badskater/distributed-encoder/internal/db"
@@ -25,8 +26,8 @@ func toUserResponse(u *db.User) userResponse {
 		Username:  u.Username,
 		Email:     u.Email,
 		Role:      u.Role,
-		CreatedAt: u.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt: u.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt: u.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt: u.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
