@@ -1,4 +1,4 @@
-# AGENTS.md
+# CLAUDE.md
 
 ## Purpose
 This file defines how contributors (including AI agents) should work in this repo.
@@ -58,7 +58,7 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 
 ## Architecture documentation
 - If a change impacts system flows, data contracts, or infrastructure, update:
-  - Docs/md/Architecture.md
+  - ARCHITECTURE.md
 - When a design choice is not yet final, capture it in the Open Decisions section.
 
 ## Testing and verification
