@@ -1,20 +1,18 @@
 package api
 
 import (
-	"embed"
 	"io/fs"
 	"net/http"
 	"strings"
-)
 
-//go:embed all:../../../web/dist
-var staticFiles embed.FS
+	webui "github.com/badskater/distributed-encoder/web"
+)
 
 // staticHandler serves the embedded SPA. For any path that does not map
 // to an actual file in dist/, it falls back to serving index.html so that
 // client-side routing works correctly.
 func (s *Server) staticHandler() http.Handler {
-	dist, err := fs.Sub(staticFiles, "web/dist")
+	dist, err := fs.Sub(webui.Files, "dist")
 	if err != nil {
 		panic("static: sub fs: " + err.Error())
 	}
