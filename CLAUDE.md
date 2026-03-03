@@ -24,7 +24,7 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 ## Instruction precedence
 - Resolve conflicts in this order:
   - Direct user request
-  - AGENTS.md
+  - CLAUDE.md
   - Repository READMEs and defaults
 - If instructions conflict and priority is unclear, call out the conflict explicitly before proceeding.
 
