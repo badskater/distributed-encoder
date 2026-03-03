@@ -2523,19 +2523,25 @@ User creates job via Web UI / API
          │
          ▼
 ┌─────────────────┐
+│  Script Generator│ Writes .avs/.vpy + .bat to UNC share
+│  writes to share │ \\NAS\...\chunks\chunk_NNN\
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
 │  Agent receives  │ via gRPC PollTask()
-│  TaskAssignment  │ includes script content + variables
+│  TaskAssignment  │ includes UNC script_dir + DE_PARAM_* vars
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  Agent writes    │ Scripts to C:\DistEncoder\work\{job_id}\
-│  scripts to disk │
+│  Agent validates │ DE_PARAM_* completeness, UNC path
+│  task            │ allow-list, script presence, timeout
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  Agent executes  │ cmd.exe /c encode.bat
+│  Agent executes  │ cmd.exe /c \\NAS\...\chunk_NNN\encode.bat
 │  .bat file       │ Streams progress → Controller (or local SQLite)
 └────────┬────────┘
          │

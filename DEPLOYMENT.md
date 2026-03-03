@@ -436,7 +436,7 @@ For environments that need zero-downtime database failover.
 ### 6.1 Patroni + pgBouncer Setup
 
 ```yaml
-# deployments/patroni/docker-compose.ha.yml
+# deployments/patroni.yml
 services:
   etcd:
     image: quay.io/coreos/etcd:v3.5

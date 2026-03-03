@@ -63,7 +63,8 @@ internal/
   shared/            Shared types and utilities
 web/                 SvelteKit static build (embedded in controller binary)
 proto/               Protobuf source files
-scripts/             Helper scripts (cert generation, etc.)
+scripts/
+  gen-certs.sh       mTLS certificate generation helper
 Makefile
 ```
 
