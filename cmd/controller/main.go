@@ -8,6 +8,9 @@ import (
 	"github.com/badskater/distributed-encoder/internal/controller/cli"
 )
 
+// Version is set at build time via -ldflags "-X main.Version=..."
+var Version = "dev"
+
 func main() {
 	ctx := context.Background()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{

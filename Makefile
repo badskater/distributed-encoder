@@ -1,5 +1,8 @@
 .PHONY: all controller agent web proto test lint migrate-up migrate-down migrate-status bin
 
+VERSION        ?= dev
+LDFLAGS        := -s -w -X main.Version=$(VERSION)
+
 CONTROLLER_BIN := bin/controller
 AGENT_BIN      := bin/agent.exe
 
@@ -7,11 +10,11 @@ all: web controller agent
 
 controller: bin
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-		go build -ldflags="-s -w" -o $(CONTROLLER_BIN) ./cmd/controller
+		go build -ldflags="$(LDFLAGS)" -o $(CONTROLLER_BIN) ./cmd/controller
 
 agent: bin
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-		go build -ldflags="-s -w" -o $(AGENT_BIN) ./cmd/agent
+		go build -ldflags="$(LDFLAGS)" -o $(AGENT_BIN) ./cmd/agent
 
 web:
 	cd web && npm ci && npm run build
