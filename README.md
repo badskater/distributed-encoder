@@ -321,7 +321,7 @@ Tests live alongside the code they cover in `internal/**/...`. Integration tests
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Full system design, data flows, component deep-dives |
 | [AGENTS.md](AGENTS.md) | Agent specification, state machine, configuration reference |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Step-by-step deployment, TLS setup, HA configuration, troubleshooting |
-| [CLAUDE.md](CLAUDE.md) | Contributor and AI agent working instructions |
+| [CLAUDE.md](CLAUDE.md) | Contributor and AI agent working instructions - Used to help build commits and documentations |
 
 ---
 
