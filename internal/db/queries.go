@@ -91,6 +91,15 @@ func (s *pgStore) DeleteUser(ctx context.Context, id string) error {
 	return nil
 }
 
+func (s *pgStore) CountAdminUsers(ctx context.Context) (int64, error) {
+	const q = `SELECT COUNT(*) FROM users WHERE role = 'admin'`
+	var n int64
+	if err := s.pool.QueryRow(ctx, q).Scan(&n); err != nil {
+		return 0, fmt.Errorf("db: count admin users: %w", err)
+	}
+	return n, nil
+}
+
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
 	err := row.Scan(

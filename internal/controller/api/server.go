@@ -83,6 +83,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/openapi.json", s.handleOpenAPISpec)
 
+	// Setup wizard — unauthenticated, functional only before first admin exists
+	mux.HandleFunc("GET /setup/status", s.handleSetupStatus)
+	mux.HandleFunc("POST /setup", s.handleSetup)
+
 	// Auth endpoints (no session required)
 	mux.HandleFunc("POST /auth/login", s.handleLogin)
 	mux.HandleFunc("POST /auth/logout", s.handleLogout)

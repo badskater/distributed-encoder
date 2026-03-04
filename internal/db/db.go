@@ -29,6 +29,7 @@ type Store interface {
 	ListUsers(ctx context.Context) ([]*User, error)
 	UpdateUserRole(ctx context.Context, id, role string) error
 	DeleteUser(ctx context.Context, id string) error
+	CountAdminUsers(ctx context.Context) (int64, error)
 
 	// --- Agents ---
 	UpsertAgent(ctx context.Context, p UpsertAgentParams) (*Agent, error)

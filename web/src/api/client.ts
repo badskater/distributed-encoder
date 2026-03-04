@@ -2,6 +2,20 @@ import type { Job, Task, Agent, Source, Template, Variable, Webhook, User, LogEn
 
 const API_BASE = '/api/v1'
 
+// Setup wizard — unauthenticated endpoints outside /api/v1
+export const getSetupStatus = (): Promise<{ required: boolean }> =>
+  fetch('/setup/status', { credentials: 'include' })
+    .then(r => r.json())
+    .then((j: { required?: boolean }) => ({ required: j.required ?? false }))
+
+export const postSetup = (body: { username: string; email: string; password: string }) =>
+  fetch('/setup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message)

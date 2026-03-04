@@ -4,6 +4,7 @@ import * as api from './api/client'
 import type { User } from './types'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import Setup from './pages/Setup'
 import Dashboard from './pages/Dashboard'
 import Sources from './pages/Sources'
 import SourceDetail from './pages/SourceDetail'
@@ -19,12 +20,27 @@ import Variables from './pages/admin/Variables'
 function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [setupRequired, setSetupRequired] = useState(false)
 
   useEffect(() => {
-    api.getMe()
-      .then(u => setUser(u))
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    const init = async () => {
+      try {
+        const status = await api.getSetupStatus()
+        if (status.required) {
+          setSetupRequired(true)
+          return
+        }
+      } catch {
+        // If the setup/status endpoint is unreachable, fall through to normal auth.
+      }
+      try {
+        const u = await api.getMe()
+        setUser(u)
+      } catch {
+        // Not authenticated — Login page handles this.
+      }
+    }
+    init().finally(() => setLoading(false))
   }, [])
 
   if (loading) {
@@ -32,6 +48,18 @@ function App() {
       <div className="flex h-screen items-center justify-center text-gray-500">
         Loading…
       </div>
+    )
+  }
+
+  if (setupRequired) {
+    return (
+      <Routes>
+        <Route
+          path="/setup"
+          element={<Setup onComplete={() => setSetupRequired(false)} />}
+        />
+        <Route path="*" element={<Navigate to="/setup" replace />} />
+      </Routes>
     )
   }
 
