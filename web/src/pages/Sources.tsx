@@ -45,41 +45,41 @@ export default function Sources() {
   useEffect(() => { load() }, [load])
   useAutoRefresh(load)
 
-  if (loading) return <p className="text-gray-500">Loading…</p>
+  if (loading) return <p className="text-th-text-muted">Loading…</p>
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">Sources</h1>
+      <h1 className="text-2xl font-bold text-th-text">Sources</h1>
       {error && <p className="text-red-600 text-sm">{error}</p>}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-th-border text-sm">
+          <thead className="bg-th-surface-muted">
             <tr>
               {['Filename', 'Path', 'Size', 'Duration', 'VMAF', 'State', 'Created'].map(h => (
-                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-th-border-subtle">
             {sources.map(s => (
               <tr
                 key={s.id}
                 onClick={() => navigate(`/sources/${s.id}`)}
-                className="hover:bg-gray-50 cursor-pointer"
+                className="hover:bg-th-surface-muted cursor-pointer"
               >
-                <td className="px-4 py-2 font-medium text-gray-900">{s.filename}</td>
-                <td className="px-4 py-2 text-gray-500 max-w-xs truncate">{s.path}</td>
-                <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{fmtBytes(s.size_bytes)}</td>
-                <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{fmtDuration(s.duration_sec)}</td>
-                <td className="px-4 py-2 text-gray-700">
+                <td className="px-4 py-2 font-medium text-th-text">{s.filename}</td>
+                <td className="px-4 py-2 text-th-text-muted max-w-xs truncate">{s.path}</td>
+                <td className="px-4 py-2 text-th-text-secondary whitespace-nowrap">{fmtBytes(s.size_bytes)}</td>
+                <td className="px-4 py-2 text-th-text-secondary whitespace-nowrap">{fmtDuration(s.duration_sec)}</td>
+                <td className="px-4 py-2 text-th-text-secondary">
                   {s.vmaf_score != null ? s.vmaf_score.toFixed(1) : '—'}
                 </td>
                 <td className="px-4 py-2"><StatusBadge status={s.state} /></td>
-                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{fmtDate(s.created_at)}</td>
+                <td className="px-4 py-2 text-th-text-muted whitespace-nowrap">{fmtDate(s.created_at)}</td>
               </tr>
             ))}
             {sources.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-4 text-center text-gray-400">No sources found</td></tr>
+              <tr><td colSpan={7} className="px-4 py-4 text-center text-th-text-subtle">No sources found</td></tr>
             )}
           </tbody>
         </table>

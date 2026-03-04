@@ -68,12 +68,12 @@ export default function Users() {
     }
   }
 
-  if (loading) return <p className="text-gray-500">Loading…</p>
+  if (loading) return <p className="text-th-text-muted">Loading…</p>
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Users</h1>
+        <h1 className="text-2xl font-bold text-th-text">Users</h1>
         <button
           onClick={() => setShowForm(!showForm)}
           className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700"
@@ -85,30 +85,30 @@ export default function Users() {
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white rounded-lg shadow p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700">New User</h2>
+        <form onSubmit={handleCreate} className="bg-th-surface rounded-lg shadow p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-th-text-secondary">New User</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Username</label>
+              <label className="block text-xs text-th-text-muted mb-1">Username</label>
               <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" required />
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" required />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Email</label>
+              <label className="block text-xs text-th-text-muted mb-1">Email</label>
               <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" required />
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" required />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Role</label>
+              <label className="block text-xs text-th-text-muted mb-1">Role</label>
               <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as User['role'] }))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text">
                 {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Password</label>
+              <label className="block text-xs text-th-text-muted mb-1">Password</label>
               <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" required />
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" required />
             </div>
           </div>
           <button type="submit" disabled={saving}
@@ -118,38 +118,43 @@ export default function Users() {
         </form>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-th-border text-sm">
+          <thead className="bg-th-surface-muted">
             <tr>
               {['Username', 'Email', 'Role', 'Created', ''].map(h => (
-                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-th-border-subtle">
             {users.map(u => (
-              <tr key={u.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2 font-medium text-gray-900">{u.username}</td>
-                <td className="px-4 py-2 text-gray-500">{u.email}</td>
+              <tr key={u.id} className="hover:bg-th-surface-muted">
+                <td className="px-4 py-2 font-medium text-th-text">{u.username}</td>
+                <td className="px-4 py-2 text-th-text-muted">{u.email}</td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
                     <select
                       value={roleUpdates[u.id] ?? u.role}
                       onChange={e => setRoleUpdates(r => ({ ...r, [u.id]: e.target.value }))}
-                      className="border border-gray-300 rounded px-2 py-1 text-xs"
+                      className="bg-th-input-bg border border-th-input-border rounded px-2 py-1 text-xs text-th-text"
                     >
                       {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                     {roleUpdates[u.id] && roleUpdates[u.id] !== u.role && (
                       <button onClick={() => handleRoleUpdate(u.id)}
-                        className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded hover:bg-blue-200">
+                        className="text-xs px-2 py-0.5 rounded"
+                        style={{
+                          backgroundColor: 'var(--th-badge-running-bg)',
+                          color: 'var(--th-badge-running-text)',
+                        }}
+                      >
                         Save
                       </button>
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{fmtDate(u.created_at)}</td>
+                <td className="px-4 py-2 text-th-text-muted whitespace-nowrap">{fmtDate(u.created_at)}</td>
                 <td className="px-4 py-2">
                   <button onClick={() => handleDelete(u.id, u.username)}
                     className="text-xs text-red-600 hover:underline">Delete</button>
@@ -157,7 +162,7 @@ export default function Users() {
               </tr>
             ))}
             {users.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-4 text-center text-gray-400">No users</td></tr>
+              <tr><td colSpan={5} className="px-4 py-4 text-center text-th-text-subtle">No users</td></tr>
             )}
           </tbody>
         </table>

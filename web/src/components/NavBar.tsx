@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import * as api from '../api/client'
+import ThemePicker from './ThemePicker'
 
 interface Props {
   role: string
@@ -8,7 +9,7 @@ interface Props {
 
 const linkCls = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-2 rounded text-sm font-medium transition-colors ${
-    isActive ? 'bg-gray-900 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+    isActive ? 'bg-th-nav-active text-white' : 'text-th-nav-text hover:bg-th-nav-hover hover:text-white'
   }`
 
 export default function NavBar({ role, onLogout }: Props) {
@@ -21,7 +22,7 @@ export default function NavBar({ role, onLogout }: Props) {
   }
 
   return (
-    <nav className="bg-gray-800">
+    <nav className="bg-th-nav-bg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-1">
@@ -40,10 +41,11 @@ export default function NavBar({ role, onLogout }: Props) {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-gray-400 text-sm capitalize">{role}</span>
+            <ThemePicker />
+            <span className="text-th-text-subtle text-sm capitalize">{role}</span>
             <button
               onClick={handleLogout}
-              className="text-gray-300 hover:text-white text-sm px-3 py-1 rounded hover:bg-gray-700"
+              className="text-th-nav-text hover:text-white text-sm px-3 py-1 rounded hover:bg-th-nav-hover"
             >
               Logout
             </button>

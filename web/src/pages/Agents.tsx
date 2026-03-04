@@ -46,39 +46,39 @@ export default function Agents() {
     }
   }
 
-  if (loading) return <p className="text-gray-500">Loading…</p>
+  if (loading) return <p className="text-th-text-muted">Loading…</p>
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">Agents</h1>
+      <h1 className="text-2xl font-bold text-th-text">Agents</h1>
       {error && <p className="text-red-600 text-sm">{error}</p>}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-th-border text-sm">
+          <thead className="bg-th-surface-muted">
             <tr>
               {['Name', 'Hostname', 'IP', 'Status', 'CPU', 'RAM', 'GPU', 'Last Heartbeat', 'Tags', ''].map(h => (
-                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-th-border-subtle">
             {agents.map(a => (
-              <tr key={a.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2 font-medium text-gray-900">{a.name}</td>
-                <td className="px-4 py-2 text-gray-700">{a.hostname}</td>
-                <td className="px-4 py-2 text-gray-700">{a.ip_address}</td>
+              <tr key={a.id} className="hover:bg-th-surface-muted">
+                <td className="px-4 py-2 font-medium text-th-text">{a.name}</td>
+                <td className="px-4 py-2 text-th-text-secondary">{a.hostname}</td>
+                <td className="px-4 py-2 text-th-text-secondary">{a.ip_address}</td>
                 <td className="px-4 py-2"><StatusBadge status={a.status} /></td>
-                <td className="px-4 py-2 text-gray-700">{a.cpu_count} cores</td>
-                <td className="px-4 py-2 text-gray-700">{fmtBytes(a.ram_mib)}</td>
-                <td className="px-4 py-2 text-gray-700">
+                <td className="px-4 py-2 text-th-text-secondary">{a.cpu_count} cores</td>
+                <td className="px-4 py-2 text-th-text-secondary">{fmtBytes(a.ram_mib)}</td>
+                <td className="px-4 py-2 text-th-text-secondary">
                   {a.gpu_enabled ? (
                     <span title={[a.nvenc && 'NVENC', a.qsv && 'QSV', a.amf && 'AMF'].filter(Boolean).join(', ')}>
                       {a.gpu_vendor} {a.gpu_model}
                     </span>
                   ) : '—'}
                 </td>
-                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{fmtDate(a.last_heartbeat)}</td>
-                <td className="px-4 py-2 text-gray-500">
+                <td className="px-4 py-2 text-th-text-muted whitespace-nowrap">{fmtDate(a.last_heartbeat)}</td>
+                <td className="px-4 py-2 text-th-text-muted">
                   {a.tags.length > 0 ? a.tags.join(', ') : '—'}
                 </td>
                 <td className="px-4 py-2">
@@ -86,7 +86,11 @@ export default function Agents() {
                     <button
                       onClick={() => handleDrain(a.id)}
                       disabled={draining === a.id}
-                      className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded hover:bg-orange-200 disabled:opacity-50"
+                      className="text-xs px-2 py-1 rounded disabled:opacity-50"
+                      style={{
+                        backgroundColor: 'var(--th-badge-draining-bg)',
+                        color: 'var(--th-badge-draining-text)',
+                      }}
                     >
                       {draining === a.id ? 'Draining…' : 'Drain'}
                     </button>
@@ -95,7 +99,7 @@ export default function Agents() {
               </tr>
             ))}
             {agents.length === 0 && (
-              <tr><td colSpan={10} className="px-4 py-4 text-center text-gray-400">No agents registered</td></tr>
+              <tr><td colSpan={10} className="px-4 py-4 text-center text-th-text-subtle">No agents registered</td></tr>
             )}
           </tbody>
         </table>

@@ -80,12 +80,12 @@ export default function Webhooks() {
     }
   }
 
-  if (loading) return <p className="text-gray-500">Loading…</p>
+  if (loading) return <p className="text-th-text-muted">Loading…</p>
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Webhooks</h1>
+        <h1 className="text-2xl font-bold text-th-text">Webhooks</h1>
         <button
           onClick={() => setShowForm(!showForm)}
           className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700"
@@ -97,37 +97,37 @@ export default function Webhooks() {
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white rounded-lg shadow p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700">New Webhook</h2>
+        <form onSubmit={handleCreate} className="bg-th-surface rounded-lg shadow p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-th-text-secondary">New Webhook</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Name</label>
+              <label className="block text-xs text-th-text-muted mb-1">Name</label>
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" required />
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" required />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Provider</label>
+              <label className="block text-xs text-th-text-muted mb-1">Provider</label>
               <select value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value as Webhook['provider'] }))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text">
                 {PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">URL</label>
+            <label className="block text-xs text-th-text-muted mb-1">URL</label>
             <input type="url" value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" required />
+              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" required />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Secret (optional)</label>
+            <label className="block text-xs text-th-text-muted mb-1">Secret (optional)</label>
             <input value={form.secret} onChange={e => setForm(f => ({ ...f, secret: e.target.value }))}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Events</label>
+            <label className="block text-xs text-th-text-muted mb-1">Events</label>
             <div className="flex flex-wrap gap-2">
               {EVENT_OPTIONS.map(ev => (
-                <label key={ev} className="flex items-center gap-1 text-sm cursor-pointer">
+                <label key={ev} className="flex items-center gap-1 text-sm text-th-text-secondary cursor-pointer">
                   <input type="checkbox" checked={form.events.includes(ev)} onChange={() => toggleEvent(ev)} />
                   {ev}
                 </label>
@@ -141,30 +141,35 @@ export default function Webhooks() {
         </form>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-th-border text-sm">
+          <thead className="bg-th-surface-muted">
             <tr>
               {['Name', 'Provider', 'URL', 'Events', 'Enabled', ''].map(h => (
-                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-th-border-subtle">
             {webhooks.map(w => (
-              <tr key={w.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2 font-medium text-gray-900">{w.name}</td>
-                <td className="px-4 py-2 text-gray-700">{w.provider}</td>
-                <td className="px-4 py-2 text-gray-500 max-w-xs truncate">{w.url}</td>
-                <td className="px-4 py-2 text-gray-500 text-xs">{w.events.join(', ') || '—'}</td>
+              <tr key={w.id} className="hover:bg-th-surface-muted">
+                <td className="px-4 py-2 font-medium text-th-text">{w.name}</td>
+                <td className="px-4 py-2 text-th-text-secondary">{w.provider}</td>
+                <td className="px-4 py-2 text-th-text-muted max-w-xs truncate">{w.url}</td>
+                <td className="px-4 py-2 text-th-text-muted text-xs">{w.events.join(', ') || '—'}</td>
                 <td className="px-4 py-2">
-                  <span className={`text-xs font-medium ${w.enabled ? 'text-green-600' : 'text-gray-400'}`}>
+                  <span className={`text-xs font-medium ${w.enabled ? 'text-green-600' : 'text-th-text-subtle'}`}>
                     {w.enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </td>
                 <td className="px-4 py-2 flex gap-2">
                   <button onClick={() => handleTest(w.id)} disabled={testing === w.id}
-                    className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded hover:bg-blue-200 disabled:opacity-50">
+                    className="text-xs px-2 py-0.5 rounded disabled:opacity-50"
+                    style={{
+                      backgroundColor: 'var(--th-badge-running-bg)',
+                      color: 'var(--th-badge-running-text)',
+                    }}
+                  >
                     {testing === w.id ? 'Testing…' : 'Test'}
                   </button>
                   <button onClick={() => handleDelete(w.id)}
@@ -173,7 +178,7 @@ export default function Webhooks() {
               </tr>
             ))}
             {webhooks.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-4 text-center text-gray-400">No webhooks configured</td></tr>
+              <tr><td colSpan={6} className="px-4 py-4 text-center text-th-text-subtle">No webhooks configured</td></tr>
             )}
           </tbody>
         </table>

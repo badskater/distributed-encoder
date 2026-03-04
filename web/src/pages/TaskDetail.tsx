@@ -18,9 +18,9 @@ function fmtDate(s: string | null) {
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex py-2 border-b border-gray-100 last:border-0">
-      <span className="w-40 text-sm text-gray-500 shrink-0">{label}</span>
-      <span className="text-sm text-gray-900">{value}</span>
+    <div className="flex py-2 border-b border-th-border-subtle last:border-0">
+      <span className="w-40 text-sm text-th-text-muted shrink-0">{label}</span>
+      <span className="text-sm text-th-text">{value}</span>
     </div>
   )
 }
@@ -55,20 +55,20 @@ export default function TaskDetail() {
   useEffect(() => { load() }, [load])
   useAutoRefresh(load)
 
-  if (loading) return <p className="text-gray-500">Loading…</p>
+  if (loading) return <p className="text-th-text-muted">Loading…</p>
   if (error) return <p className="text-red-600">{error}</p>
-  if (!task) return <p className="text-gray-500">Task not found</p>
+  if (!task) return <p className="text-th-text-muted">Task not found</p>
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link to={`/jobs/${task.job_id}`} className="text-blue-600 hover:underline text-sm">← Job</Link>
-        <h1 className="text-xl font-bold text-gray-900">Task <span className="font-mono">{task.id.slice(0, 8)}…</span></h1>
+        <h1 className="text-xl font-bold text-th-text">Task <span className="font-mono">{task.id.slice(0, 8)}…</span></h1>
         <StatusBadge status={task.status} />
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4">
-        <h2 className="text-sm font-semibold text-gray-700 mb-2">Task Details</h2>
+      <div className="bg-th-surface rounded-lg shadow p-4">
+        <h2 className="text-sm font-semibold text-th-text-secondary mb-2">Task Details</h2>
         <Row label="ID" value={<span className="font-mono text-xs">{task.id}</span>} />
         <Row label="Job" value={<Link to={`/jobs/${task.job_id}`} className="text-blue-600 hover:underline font-mono text-xs">{task.job_id.slice(0, 8)}…</Link>} />
         <Row label="Chunk Index" value={task.chunk_index} />
@@ -82,23 +82,23 @@ export default function TaskDetail() {
         {task.error_msg && <Row label="Error" value={<span className="text-red-600 text-xs">{task.error_msg}</span>} />}
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Logs ({logs.length})</h2>
+      <div className="bg-th-surface rounded-lg shadow">
+        <div className="px-4 py-3 border-b border-th-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-th-text-secondary">Logs ({logs.length})</h2>
         </div>
-        <div className="bg-gray-900 rounded-b-lg overflow-auto max-h-[500px] p-4 font-mono text-xs">
+        <div className="bg-th-log-bg rounded-b-lg overflow-auto max-h-[500px] p-4 font-mono text-xs">
           {logs.length === 0 ? (
-            <span className="text-gray-500">No logs available</span>
+            <span className="text-th-text-muted">No logs available</span>
           ) : (
             logs.map(entry => (
               <div key={entry.id} className="flex gap-2 leading-5">
-                <span className="text-gray-500 whitespace-nowrap shrink-0">
+                <span className="text-th-text-muted whitespace-nowrap shrink-0">
                   {new Date(entry.timestamp).toLocaleTimeString()}
                 </span>
-                <span className={`w-12 shrink-0 ${streamColors[entry.stream] ?? 'text-gray-400'}`}>
+                <span className={`w-12 shrink-0 ${streamColors[entry.stream] ?? 'text-th-text-subtle'}`}>
                   {entry.stream}
                 </span>
-                <span className="text-gray-300 break-all">{entry.message}</span>
+                <span className="text-th-log-text break-all">{entry.message}</span>
               </div>
             ))
           )}

@@ -9,7 +9,7 @@ interface Props {
 
 export default function Layout({ role, onLogout, children }: Props) {
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-th-bg">
       <NavBar role={role} onLogout={onLogout} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}

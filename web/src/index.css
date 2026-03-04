@@ -1,3 +1,98 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  /* surfaces */
+  --th-bg:              #f3f4f6;
+  --th-surface:         #ffffff;
+  --th-surface-muted:   #f9fafb;
+  /* text */
+  --th-text:            #111827;
+  --th-text-secondary:  #374151;
+  --th-text-muted:      #6b7280;
+  --th-text-subtle:     #9ca3af;
+  /* borders */
+  --th-border:          #e5e7eb;
+  --th-border-subtle:   #f3f4f6;
+  /* nav */
+  --th-nav-bg:          #1f2937;
+  --th-nav-active:      #111827;
+  --th-nav-hover:       #374151;
+  --th-nav-text:        #d1d5db;
+  /* inputs */
+  --th-input-bg:        #ffffff;
+  --th-input-border:    #d1d5db;
+  /* log viewer */
+  --th-log-bg:          #111827;
+  --th-log-text:        #d1d5db;
+  /* progress bar track */
+  --th-progress-track:  #e5e7eb;
+  /* status badge colors */
+  --th-badge-success-bg:   #dcfce7; --th-badge-success-text:   #166534;
+  --th-badge-running-bg:   #dbeafe; --th-badge-running-text:   #1e40af;
+  --th-badge-error-bg:     #fee2e2; --th-badge-error-text:     #991b1b;
+  --th-badge-warning-bg:   #fef9c3; --th-badge-warning-text:   #854d0e;
+  --th-badge-assigned-bg:  #e0e7ff; --th-badge-assigned-text:  #3730a3;
+  --th-badge-draining-bg:  #ffedd5; --th-badge-draining-text:  #9a3412;
+  --th-badge-neutral-bg:   #f3f4f6; --th-badge-neutral-text:   #4b5563;
+  --th-badge-approval-bg:  #f3e8ff; --th-badge-approval-text:  #6b21a8;
+}
+
+[data-theme="dark"] {
+  --th-bg:              #0f172a;
+  --th-surface:         #1e293b;
+  --th-surface-muted:   #0f172a;
+  --th-text:            #f1f5f9;
+  --th-text-secondary:  #cbd5e1;
+  --th-text-muted:      #94a3b8;
+  --th-text-subtle:     #64748b;
+  --th-border:          #334155;
+  --th-border-subtle:   #1e293b;
+  --th-nav-bg:          #020617;
+  --th-nav-active:      #0f172a;
+  --th-nav-hover:       #1e293b;
+  --th-nav-text:        #94a3b8;
+  --th-input-bg:        #1e293b;
+  --th-input-border:    #475569;
+  --th-log-bg:          #020617;
+  --th-log-text:        #94a3b8;
+  --th-progress-track:  #334155;
+  --th-badge-success-bg:   #14532d; --th-badge-success-text:   #86efac;
+  --th-badge-running-bg:   #1e3a5f; --th-badge-running-text:   #93c5fd;
+  --th-badge-error-bg:     #7f1d1d; --th-badge-error-text:     #fca5a5;
+  --th-badge-warning-bg:   #713f12; --th-badge-warning-text:   #fde047;
+  --th-badge-assigned-bg:  #312e81; --th-badge-assigned-text:  #a5b4fc;
+  --th-badge-draining-bg:  #7c2d12; --th-badge-draining-text:  #fdba74;
+  --th-badge-neutral-bg:   #374151; --th-badge-neutral-text:   #d1d5db;
+  --th-badge-approval-bg:  #4a1d96; --th-badge-approval-text:  #d8b4fe;
+}
+
+[data-theme="dim"] {
+  --th-bg:              #1c2128;
+  --th-surface:         #22272e;
+  --th-surface-muted:   #2d333b;
+  --th-text:            #adbac7;
+  --th-text-secondary:  #909dab;
+  --th-text-muted:      #768390;
+  --th-text-subtle:     #545d68;
+  --th-border:          #373e47;
+  --th-border-subtle:   #2d333b;
+  --th-nav-bg:          #161b22;
+  --th-nav-active:      #1c2128;
+  --th-nav-hover:       #2d333b;
+  --th-nav-text:        #768390;
+  --th-input-bg:        #22272e;
+  --th-input-border:    #444c56;
+  --th-log-bg:          #161b22;
+  --th-log-text:        #768390;
+  --th-progress-track:  #373e47;
+  --th-badge-success-bg:   #1a3a2a; --th-badge-success-text:   #6bc46d;
+  --th-badge-running-bg:   #1a2e4a; --th-badge-running-text:   #6caeef;
+  --th-badge-error-bg:     #3a1a1a; --th-badge-error-text:     #e06c75;
+  --th-badge-warning-bg:   #3a2a10; --th-badge-warning-text:   #e3b341;
+  --th-badge-assigned-bg:  #1a1f3a; --th-badge-assigned-text:  #8b949e;
+  --th-badge-draining-bg:  #3a2010; --th-badge-draining-text:  #e3964a;
+  --th-badge-neutral-bg:   #2d333b; --th-badge-neutral-text:   #768390;
+  --th-badge-approval-bg:  #2a1a3a; --th-badge-approval-text:  #d2a8ff;
+}

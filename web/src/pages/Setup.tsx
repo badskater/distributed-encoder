@@ -61,12 +61,12 @@ export default function Setup({ onComplete }: Props) {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
-      <div className="bg-white rounded-lg shadow p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1 text-center">
+    <div className="min-h-screen bg-th-bg flex items-center justify-center px-4">
+      <div className="bg-th-surface rounded-lg shadow p-8 w-full max-w-md">
+        <h1 className="text-2xl font-bold text-th-text mb-1 text-center">
           Distributed Encoder Setup
         </h1>
-        <p className="text-sm text-gray-500 text-center mb-6">
+        <p className="text-sm text-th-text-muted text-center mb-6">
           Welcome. Complete these steps to get started.
         </p>
 
@@ -83,12 +83,12 @@ export default function Setup({ onComplete }: Props) {
                       ? 'bg-green-500 text-white'
                       : active
                       ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-500'
+                      : 'bg-th-surface-muted text-th-text-muted'
                   }`}
                 >
                   {done ? '✓' : i + 1}
                 </div>
-                <span className={`text-sm ${active ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                <span className={`text-sm ${active ? 'text-th-text font-medium' : 'text-th-text-muted'}`}>
                   {s.label}
                 </span>
               </div>
@@ -99,50 +99,50 @@ export default function Setup({ onComplete }: Props) {
         {step === 'account' && (
           <form onSubmit={handleCreateAccount} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+              <label className="block text-sm font-medium text-th-text-secondary mb-1">Username</label>
               <input
                 type="text"
                 value={form.username}
                 onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-3 py-2 text-sm text-th-text focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
                 autoFocus
                 autoComplete="username"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-th-text-secondary mb-1">Email</label>
               <input
                 type="email"
                 value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-3 py-2 text-sm text-th-text focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
                 autoComplete="email"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label className="block text-sm font-medium text-th-text-secondary mb-1">Password</label>
               <input
                 type="password"
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-3 py-2 text-sm text-th-text focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
                 minLength={8}
                 autoComplete="new-password"
               />
-              <p className="text-xs text-gray-400 mt-1">Minimum 8 characters.</p>
+              <p className="text-xs text-th-text-subtle mt-1">Minimum 8 characters.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-th-text-secondary mb-1">
                 Confirm Password
               </label>
               <input
                 type="password"
                 value={form.confirm}
                 onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-3 py-2 text-sm text-th-text focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
                 minLength={8}
                 autoComplete="new-password"
@@ -164,7 +164,7 @@ export default function Setup({ onComplete }: Props) {
             <div className="bg-green-50 border border-green-200 rounded px-4 py-3">
               <p className="text-sm text-green-800 font-medium">Admin account created successfully.</p>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-th-text-muted">
               Verify that the database connection is healthy before logging in.
             </p>
             <button
@@ -186,7 +186,7 @@ export default function Setup({ onComplete }: Props) {
             )}
             <button
               onClick={onComplete}
-              className="w-full border border-gray-300 text-gray-700 rounded px-4 py-2 text-sm font-medium hover:bg-gray-50"
+              className="w-full bg-th-input-bg border border-th-border text-th-text-secondary rounded px-4 py-2 text-sm font-medium hover:bg-th-surface-muted"
             >
               Continue to Login
             </button>

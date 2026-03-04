@@ -72,12 +72,12 @@ export default function Variables() {
     setEditValues(ev => ({ ...ev, [v.id]: { value: v.value, description: v.description ?? '' } }))
   }
 
-  if (loading) return <p className="text-gray-500">Loading…</p>
+  if (loading) return <p className="text-th-text-muted">Loading…</p>
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Variables</h1>
+        <h1 className="text-2xl font-bold text-th-text">Variables</h1>
         <button
           onClick={() => setShowForm(!showForm)}
           className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700"
@@ -89,23 +89,23 @@ export default function Variables() {
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleUpsert} className="bg-white rounded-lg shadow p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700">New / Update Variable</h2>
+        <form onSubmit={handleUpsert} className="bg-th-surface rounded-lg shadow p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-th-text-secondary">New / Update Variable</h2>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Name</label>
+              <label className="block text-xs text-th-text-muted mb-1">Name</label>
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm font-mono" required />
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm font-mono text-th-text" required />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Value</label>
+              <label className="block text-xs text-th-text-muted mb-1">Value</label>
               <input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm font-mono" required />
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm font-mono text-th-text" required />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Description</label>
+              <label className="block text-xs text-th-text-muted mb-1">Description</label>
               <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" />
             </div>
           </div>
           <button type="submit" disabled={saving}
@@ -115,28 +115,28 @@ export default function Variables() {
         </form>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-th-border text-sm">
+          <thead className="bg-th-surface-muted">
             <tr>
               {['Name', 'Value', 'Description', 'Updated', ''].map(h => (
-                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-th-border-subtle">
             {variables.map(v => (
-              <tr key={v.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2 font-mono text-xs font-medium text-gray-900">{v.name}</td>
+              <tr key={v.id} className="hover:bg-th-surface-muted">
+                <td className="px-4 py-2 font-mono text-xs font-medium text-th-text">{v.name}</td>
                 <td className="px-4 py-2">
                   {editId === v.id ? (
                     <input
                       value={editValues[v.id]?.value ?? v.value}
                       onChange={e => setEditValues(ev => ({ ...ev, [v.id]: { ...ev[v.id], value: e.target.value } }))}
-                      className="border border-gray-300 rounded px-2 py-1 text-xs font-mono w-full"
+                      className="bg-th-input-bg border border-th-input-border rounded px-2 py-1 text-xs font-mono text-th-text w-full"
                     />
                   ) : (
-                    <span className="font-mono text-xs text-gray-700">{v.value}</span>
+                    <span className="font-mono text-xs text-th-text-secondary">{v.value}</span>
                   )}
                 </td>
                 <td className="px-4 py-2">
@@ -144,25 +144,25 @@ export default function Variables() {
                     <input
                       value={editValues[v.id]?.description ?? ''}
                       onChange={e => setEditValues(ev => ({ ...ev, [v.id]: { ...ev[v.id], description: e.target.value } }))}
-                      className="border border-gray-300 rounded px-2 py-1 text-xs w-full"
+                      className="bg-th-input-bg border border-th-input-border rounded px-2 py-1 text-xs text-th-text w-full"
                     />
                   ) : (
-                    <span className="text-gray-500">{v.description ?? '—'}</span>
+                    <span className="text-th-text-muted">{v.description ?? '—'}</span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{fmtDate(v.updated_at)}</td>
+                <td className="px-4 py-2 text-th-text-muted whitespace-nowrap">{fmtDate(v.updated_at)}</td>
                 <td className="px-4 py-2 flex gap-2">
                   {editId === v.id ? (
                     <>
                       <button onClick={() => handleSaveEdit(v)}
                         className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded hover:bg-green-200">Save</button>
                       <button onClick={() => setEditId(null)}
-                        className="text-xs text-gray-500 hover:underline">Cancel</button>
+                        className="text-xs text-th-text-muted hover:underline">Cancel</button>
                     </>
                   ) : (
                     <>
                       <button onClick={() => startEdit(v)}
-                        className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded hover:bg-gray-200">Edit</button>
+                        className="text-xs bg-th-surface-muted text-th-text-secondary px-2 py-0.5 rounded hover:bg-th-border">Edit</button>
                       <button onClick={() => handleDelete(v.id, v.name)}
                         className="text-xs text-red-600 hover:underline">Delete</button>
                     </>
@@ -171,7 +171,7 @@ export default function Variables() {
               </tr>
             ))}
             {variables.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-4 text-center text-gray-400">No variables defined</td></tr>
+              <tr><td colSpan={5} className="px-4 py-4 text-center text-th-text-subtle">No variables defined</td></tr>
             )}
           </tbody>
         </table>

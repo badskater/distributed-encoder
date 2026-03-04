@@ -21,9 +21,9 @@ function fmtDuration(sec: number | null) {
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex py-2 border-b border-gray-100 last:border-0">
-      <span className="w-40 text-sm text-gray-500 shrink-0">{label}</span>
-      <span className="text-sm text-gray-900">{value}</span>
+    <div className="flex py-2 border-b border-th-border-subtle last:border-0">
+      <span className="w-40 text-sm text-th-text-muted shrink-0">{label}</span>
+      <span className="text-sm text-th-text">{value}</span>
     </div>
   )
 }
@@ -44,19 +44,19 @@ export default function SourceDetail() {
       .finally(() => setLoading(false))
   }, [id])
 
-  if (loading) return <p className="text-gray-500">Loading…</p>
+  if (loading) return <p className="text-th-text-muted">Loading…</p>
   if (error) return <p className="text-red-600">{error}</p>
-  if (!source) return <p className="text-gray-500">Source not found</p>
+  if (!source) return <p className="text-th-text-muted">Source not found</p>
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate('/sources')} className="text-blue-600 hover:underline text-sm">← Sources</button>
-        <h1 className="text-2xl font-bold text-gray-900">{source.filename}</h1>
+        <h1 className="text-2xl font-bold text-th-text">{source.filename}</h1>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4 space-y-1">
-        <h2 className="text-sm font-semibold text-gray-700 mb-2">Source Info</h2>
+      <div className="bg-th-surface rounded-lg shadow p-4 space-y-1">
+        <h2 className="text-sm font-semibold text-th-text-secondary mb-2">Source Info</h2>
         <Row label="Filename" value={source.filename} />
         <Row label="Path" value={<span className="font-mono text-xs break-all">{source.path}</span>} />
         <Row label="Size" value={fmtBytes(source.size_bytes)} />
@@ -66,8 +66,8 @@ export default function SourceDetail() {
       </div>
 
       {analysis && (
-        <div className="bg-white rounded-lg shadow p-4 space-y-1">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">Analysis Results</h2>
+        <div className="bg-th-surface rounded-lg shadow p-4 space-y-1">
+          <h2 className="text-sm font-semibold text-th-text-secondary mb-2">Analysis Results</h2>
           <Row label="VMAF Score" value={analysis.vmaf_score != null ? analysis.vmaf_score.toFixed(2) : '—'} />
           <Row label="PSNR" value={analysis.psnr != null ? analysis.psnr.toFixed(2) + ' dB' : '—'} />
           <Row label="SSIM" value={analysis.ssim != null ? analysis.ssim.toFixed(4) : '—'} />
