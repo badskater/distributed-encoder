@@ -36,6 +36,7 @@ func (s *stubStore) GetUserByID(context.Context, string) (*db.User, error) { ret
 func (s *stubStore) ListUsers(context.Context) ([]*db.User, error)         { return nil, nil }
 func (s *stubStore) UpdateUserRole(context.Context, string, string) error   { return nil }
 func (s *stubStore) DeleteUser(context.Context, string) error               { return nil }
+func (s *stubStore) CountAdminUsers(context.Context) (int64, error)         { return 1, nil }
 
 func (s *stubStore) UpsertAgent(context.Context, db.UpsertAgentParams) (*db.Agent, error) {
 	return nil, nil
