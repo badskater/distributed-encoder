@@ -45,5 +45,7 @@ jobs:
       - run: go mod tidy
       - name: Build controller (linux/amd64)
         run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/controller
+      - name: Build agent (linux/amd64)
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/agent
       - name: Build agent (windows/amd64)
         run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/agent

@@ -1,0 +1,48 @@
+controller:
+  address: "controller.example.com:9443"
+  tls:
+    cert: "/etc/distributed-encoder/certs/agent.crt"
+    key:  "/etc/distributed-encoder/certs/agent.key"
+    ca:   "/etc/distributed-encoder/certs/ca.crt"
+  reconnect:
+    initial_delay: 5s
+    max_delay: 5m
+    multiplier: 2.0
+
+agent:
+  hostname: ""        # auto-detected from os.Hostname() if empty
+  work_dir: "/var/lib/distributed-encoder-agent/work"
+  log_dir:  "/var/log/distributed-encoder-agent"
+  offline_db: "/var/lib/distributed-encoder-agent/offline.db"
+  heartbeat_interval: 30s
+  poll_interval: 10s
+  cleanup_on_success: true
+  keep_failed_jobs: 10
+
+tools:
+  ffmpeg:   "/usr/bin/ffmpeg"
+  ffprobe:  "/usr/bin/ffprobe"
+  x265:     "/usr/bin/x265"
+  x264:     "/usr/bin/x264"
+  svt_av1:  ""
+  avs_pipe: ""    # AviSynth not available on Linux
+  vspipe:   ""    # Set if VapourSynth is installed
+
+gpu:
+  enabled: true
+  vendor: ""          # auto-detect; override: nvidia | intel | amd
+  max_vram_mb: 0      # 0 = no limit
+  monitor_interval: 5s
+
+allowed_shares:
+  - "/mnt/nas/media"
+  - "/mnt/nas/encodes"
+
+logging:
+  level: info
+  format: json
+  max_size_mb: 100
+  max_backups: 5
+  compress: true
+  stream_buffer_size: 1000
+  stream_flush_interval: 1s

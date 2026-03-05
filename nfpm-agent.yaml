@@ -1,0 +1,65 @@
+# nFPM package descriptor — Distributed Encoder Agent (Linux)
+#
+# Build:
+#   VERSION=1.2.0 nfpm package --config nfpm-agent.yaml --packager deb --target dist/
+#
+# Install nFPM:
+#   go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+name:        distributed-encoder-agent
+arch:        amd64
+platform:    linux
+version:     ${VERSION}
+maintainer:  "badskater"
+description: |
+  Distributed Encoder Agent.
+  Connects to the Distributed Encoder Controller via gRPC+mTLS and
+  executes video encoding tasks using shell scripts. Supports NVIDIA
+  (NVENC), Intel (QSV), and AMD (AMF) hardware encoders via ffmpeg.
+homepage:    https://github.com/badskater/distributed-encoder
+license:     MIT
+section:     misc
+priority:    optional
+
+depends:
+  - adduser
+
+recommends:
+  - ffmpeg
+
+contents:
+  # ── Agent binary ─────────────────────────────────────────────────────────────
+  - src: bin/agent
+    dst: /usr/bin/distributed-encoder-agent
+    file_info:
+      mode: 0755
+
+  # ── Config template (not overwritten on upgrade) ────────────────────────────
+  - src: configs/agent-linux.yaml.example
+    dst: /etc/distributed-encoder/agent.yaml
+    type: config|noreplace
+
+  # ── Certs directory (operator populates with mTLS certs) ────────────────────
+  - dst: /etc/distributed-encoder/certs
+    type: dir
+    file_info:
+      mode: 0750
+      owner: distributed-encoder-agent
+      group: distributed-encoder-agent
+
+  # ── Work and data directories ────────────────────────────────────────────────
+  - dst: /var/lib/distributed-encoder-agent
+    type: dir
+    file_info:
+      mode: 0750
+      owner: distributed-encoder-agent
+      group: distributed-encoder-agent
+
+  # ── Systemd service unit ─────────────────────────────────────────────────────
+  - src: deployments/deb/distributed-encoder-agent.service
+    dst: /lib/systemd/system/distributed-encoder-agent.service
+
+scripts:
+  postinstall: deployments/deb/agent-postinstall.sh
+  preremove:   deployments/deb/agent-preremove.sh
+  postremove:  deployments/deb/agent-postremove.sh

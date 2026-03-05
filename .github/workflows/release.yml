@@ -1,46 +1,161 @@
 name: Release
 
+# Triggered by a semver tag push (e.g. v1.2.3).
+# Produces four artifacts attached to the GitHub Release:
+#   - distributed-encoder-controller_<ver>_linux_amd64.deb
+#   - distributed-encoder-agent_<ver>_linux_amd64.deb
+#   - distencoder-agent.exe  (Windows amd64 binary)
+#   - ghcr.io/<owner>/distributed-encoder-controller:<ver>  (container)
+#
+# The Inno Setup Windows installer is built separately by installer.yml.
+
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
+
+permissions:
+  contents: write   # create/update GitHub Release and upload assets
+  packages: write   # push container image to ghcr.io
 
 jobs:
-  release:
+
+  # ── Controller: .deb package ──────────────────────────────────────────────────
+  controller-deb:
+    name: Controller .deb
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
           cache: true
-      - run: go mod tidy
-      - name: Build controller (linux/amd64)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web UI
+        run: cd web && npm ci && npm run build
+
+      - name: Build controller binary (linux/amd64)
         run: |
-          mkdir -p dist
+          mkdir -p bin
+          VERSION="${GITHUB_REF_NAME#v}"
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go build -ldflags="-s -w" -o dist/controller ./cmd/controller
-      - name: Build agent (windows/amd64)
-        run: |
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-            go build -ldflags="-s -w" -o dist/distencoder-agent.exe ./cmd/agent
-      - name: Create release archives
-        run: |
-          cd dist
-          tar czf controller-linux-amd64.tar.gz controller
-          zip agent-windows-amd64.zip distencoder-agent.exe
+            go build -ldflags="-s -w -X main.Version=${VERSION}" \
+            -o bin/controller ./cmd/controller
+
       - name: Install nFPM
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-      - name: Build .deb package
+
+      - name: Package controller .deb
         run: |
-          VERSION="${GITHUB_REF_NAME#v}" nfpm package \
-            --config nfpm.yaml \
-            --packager deb \
-            --target dist/
-      - uses: softprops/action-gh-release@v2
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME#v}" \
+            nfpm package --config nfpm.yaml --packager deb --target dist/
+
+      - name: Upload controller .deb to release
+        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/controller-linux-amd64.tar.gz
-            dist/agent-windows-amd64.zip
-            dist/distencoder-agent.exe
-            dist/distributed-encoder-controller_*.deb
+          files: dist/distributed-encoder-controller_*.deb
+
+  # ── Controller: container image ──────────────────────────────────────────────
+  controller-container:
+    name: Controller container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract container metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/distributed-encoder-controller
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - name: Build and push controller image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deployments/Dockerfile.controller
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Agent: Linux .deb package ─────────────────────────────────────────────────
+  agent-linux-deb:
+    name: Agent Linux .deb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Build agent binary (linux/amd64)
+        run: |
+          mkdir -p bin
+          VERSION="${GITHUB_REF_NAME#v}"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags="-s -w -X main.Version=${VERSION}" \
+            -o bin/agent ./cmd/agent
+
+      - name: Install nFPM
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Package agent .deb
+        run: |
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME#v}" \
+            nfpm package --config nfpm-agent.yaml --packager deb --target dist/
+
+      - name: Upload agent .deb to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/distributed-encoder-agent_*.deb
+
+  # ── Agent: Windows .exe ───────────────────────────────────────────────────────
+  agent-windows-exe:
+    name: Agent Windows .exe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Build agent binary (windows/amd64)
+        run: |
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME#v}"
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -ldflags="-s -w -X main.Version=${VERSION}" \
+            -o dist/distencoder-agent.exe ./cmd/agent
+
+      - name: Upload agent .exe to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/distencoder-agent.exe
