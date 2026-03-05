@@ -14,7 +14,7 @@ require (
 	golang.org/x/sys v0.41.0
 	golang.org/x/time v0.14.0
 	google.golang.org/grpc v1.64.0
-	google.golang.org/protobuf v1.34.2
+	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.32.0
 )
 
