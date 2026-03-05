@@ -54,6 +54,7 @@ func (s *scriptGenStub) GetSourceByUNCPath(context.Context, string) (*db.Source,
 func (s *scriptGenStub) ListSources(context.Context, db.ListSourcesFilter) ([]*db.Source, int64, error) { return nil, 0, nil }
 func (s *scriptGenStub) UpdateSourceState(context.Context, string, string) error                   { return nil }
 func (s *scriptGenStub) UpdateSourceVMAF(context.Context, string, float64) error                   { return nil }
+func (s *scriptGenStub) UpdateSourceHDR(context.Context, db.UpdateSourceHDRParams) error           { return nil }
 func (s *scriptGenStub) DeleteSource(context.Context, string) error                                { return nil }
 func (s *scriptGenStub) CreateJob(context.Context, db.CreateJobParams) (*db.Job, error)            { return nil, nil }
 func (s *scriptGenStub) GetJobByID(context.Context, string) (*db.Job, error)                      { return nil, nil }
@@ -122,8 +123,9 @@ func TestRenderSingle_NoTemplate(t *testing.T) {
 		SourcePath: `\\nas\src.mkv`,
 		OutputPath: `\\nas\out.mkv`,
 	}
+	src := &db.Source{ID: "src-1"}
 
-	dir, err := gen.RenderSingle(context.Background(), job, task)
+	dir, err := gen.RenderSingle(context.Background(), job, task, src)
 	if err != nil {
 		t.Fatalf("RenderSingle() error = %v", err)
 	}
@@ -165,8 +167,9 @@ TYPE={{.JOB_TYPE}}`
 		SourcePath: `\\nas\movie.mkv`,
 		OutputPath: `\\nas\movie.flac`,
 	}
+	src := &db.Source{ID: "src-audio"}
 
-	dir, err := gen.RenderSingle(context.Background(), job, task)
+	dir, err := gen.RenderSingle(context.Background(), job, task, src)
 	if err != nil {
 		t.Fatalf("RenderSingle() error = %v", err)
 	}
@@ -209,8 +212,9 @@ func TestRenderSingle_GlobalVariables(t *testing.T) {
 		EncodeConfig: db.EncodeConfig{RunScriptTemplateID: "tpl-2"},
 	}
 	task := &db.Task{ID: "t2", SourcePath: `\\s\a`, OutputPath: `\\s\b`}
+	src := &db.Source{ID: "src-2"}
 
-	dir, err := gen.RenderSingle(context.Background(), job, task)
+	dir, err := gen.RenderSingle(context.Background(), job, task, src)
 	if err != nil {
 		t.Fatalf("RenderSingle() error = %v", err)
 	}
@@ -245,8 +249,9 @@ func TestRenderSingle_ExtraVarsOverrideGlobals(t *testing.T) {
 		},
 	}
 	task := &db.Task{ID: "t3", SourcePath: `\\s\a`, OutputPath: `\\s\b`}
+	src := &db.Source{ID: "src-3"}
 
-	dir, err := gen.RenderSingle(context.Background(), job, task)
+	dir, err := gen.RenderSingle(context.Background(), job, task, src)
 	if err != nil {
 		t.Fatalf("RenderSingle() error = %v", err)
 	}
@@ -276,8 +281,9 @@ func TestRenderSingle_DirCleanedUpOnTemplateError(t *testing.T) {
 		EncodeConfig: db.EncodeConfig{RunScriptTemplateID: "bad"},
 	}
 	task := &db.Task{ID: "t-err", SourcePath: `\\s\a`, OutputPath: `\\s\b`}
+	src := &db.Source{ID: "src-err"}
 
-	_, err := gen.RenderSingle(context.Background(), job, task)
+	_, err := gen.RenderSingle(context.Background(), job, task, src)
 	if err == nil {
 		t.Fatal("expected error for bad template, got nil")
 	}
@@ -502,4 +508,122 @@ func TestRenderToFile(t *testing.T) {
 			t.Errorf("file contents = %q, want %q", string(got), want)
 		}
 	})
+}
+
+func TestDvFlag(t *testing.T) {
+	fn := templateFuncs["dvFlag"].(func(string) string)
+
+	tests := []struct {
+		name    string
+		profile string
+		want    string
+	}{
+		{name: "profile 5", profile: "5", want: "--dolby-vision-profile 5"},
+		{name: "profile 7", profile: "7", want: "--dolby-vision-profile 7"},
+		{name: "profile 8", profile: "8", want: "--dolby-vision-profile 8.1"},
+		{name: "profile 9", profile: "9", want: "--dolby-vision-profile 9"},
+		{name: "no DV (0)", profile: "0", want: ""},
+		{name: "empty string", profile: "", want: ""},
+		{name: "unknown profile", profile: "3", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fn(tt.profile)
+			if got != tt.want {
+				t.Errorf("dvFlag(%q) = %q, want %q", tt.profile, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHdrFlag(t *testing.T) {
+	fn := templateFuncs["hdrFlag"].(func(string) string)
+
+	tests := []struct {
+		name    string
+		hdrType string
+		want    string
+	}{
+		{name: "hdr10", hdrType: "hdr10", want: "--hdr10 --hdr10-opt"},
+		{name: "hdr10 uppercase", hdrType: "HDR10", want: "--hdr10 --hdr10-opt"},
+		{name: "hdr10+", hdrType: "hdr10+", want: "--hdr10 --hdr10-opt --dhdr10-opt"},
+		{name: "dolby_vision", hdrType: "dolby_vision", want: "--hdr10 --hdr10-opt"},
+		{name: "hlg", hdrType: "hlg", want: "--transfer-characteristics arib-std-b67 --colorprim bt2020 --colormatrix bt2020nc"},
+		{name: "SDR empty", hdrType: "", want: ""},
+		{name: "unknown type", hdrType: "sdr", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fn(tt.hdrType)
+			if got != tt.want {
+				t.Errorf("hdrFlag(%q) = %q, want %q", tt.hdrType, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDvBitstreamFilter(t *testing.T) {
+	fn := templateFuncs["dvBitstreamFilter"].(func(string) string)
+
+	tests := []struct {
+		name    string
+		profile string
+		want    string
+	}{
+		{name: "profile 5 needs BSF", profile: "5", want: "hevc_mp4toannexb"},
+		{name: "profile 8 needs BSF", profile: "8", want: "hevc_mp4toannexb"},
+		{name: "profile 9 needs BSF", profile: "9", want: "hevc_mp4toannexb"},
+		{name: "profile 7 no BSF", profile: "7", want: ""},
+		{name: "no DV", profile: "0", want: ""},
+		{name: "empty", profile: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fn(tt.profile)
+			if got != tt.want {
+				t.Errorf("dvBitstreamFilter(%q) = %q, want %q", tt.profile, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRenderSingle_HDRVariablesInjected(t *testing.T) {
+	// HDR_TYPE and DV_PROFILE from the source must be available in templates.
+	const tplContent = `HDR={{.HDR_TYPE}} DV={{.DV_PROFILE}}`
+
+	stub := &scriptGenStub{
+		template: &db.Template{
+			ID: "tpl-hdr", Name: "hdr_run", Type: "sh", Extension: "sh",
+			Content: tplContent,
+		},
+	}
+	gen := newScriptGenerator(stub, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	job := &db.Job{
+		ID: "job-hdr", JobType: "encode",
+		EncodeConfig: db.EncodeConfig{RunScriptTemplateID: "tpl-hdr"},
+	}
+	task := &db.Task{ID: "t-hdr", SourcePath: `\\s\movie.mkv`, OutputPath: `\\s\out.mkv`}
+	src := &db.Source{ID: "src-hdr", HDRType: "dolby_vision", DVProfile: 8}
+
+	dir, err := gen.RenderSingle(context.Background(), job, task, src)
+	if err != nil {
+		t.Fatalf("RenderSingle() error = %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, "run.sh"))
+	if err != nil {
+		t.Fatalf("reading script: %v", err)
+	}
+
+	got := string(content)
+	if !strings.Contains(got, "dolby_vision") {
+		t.Errorf("expected HDR_TYPE=dolby_vision in script, got:\n%s", got)
+	}
+	if !strings.Contains(got, "8") {
+		t.Errorf("expected DV_PROFILE=8 in script, got:\n%s", got)
+	}
 }

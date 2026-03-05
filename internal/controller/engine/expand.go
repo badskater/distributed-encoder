@@ -31,6 +31,8 @@ func (e *Engine) expandJob(ctx context.Context, job *db.Job) error {
 		return e.expandEncodeJob(ctx, job)
 	case "analysis", "audio":
 		return e.expandSingleTaskJob(ctx, job)
+	case "hdr_detect":
+		return e.expandHDRDetectJob(ctx, job)
 	default:
 		e.logger.Error("engine: unknown job type, skipping", "job_id", job.ID, "job_type", job.JobType)
 		return nil
@@ -73,7 +75,7 @@ func (e *Engine) expandEncodeJob(ctx context.Context, job *db.Job) error {
 			return fmt.Errorf("engine: create task chunk %d: %w", i, err)
 		}
 
-		scriptDir, err := e.gen.Render(ctx, job, task)
+		scriptDir, err := e.gen.Render(ctx, job, task, source)
 		if err != nil {
 			_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
 			return fmt.Errorf("engine: render scripts chunk %d: %w", i, err)
@@ -113,7 +115,7 @@ func (e *Engine) expandSingleTaskJob(ctx context.Context, job *db.Job) error {
 		return fmt.Errorf("engine: create single task: %w", err)
 	}
 
-	scriptDir, err := e.gen.RenderSingle(ctx, job, task)
+	scriptDir, err := e.gen.RenderSingle(ctx, job, task, source)
 	if err != nil {
 		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
 		return fmt.Errorf("engine: render single task scripts: %w", err)

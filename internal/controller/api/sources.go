@@ -194,6 +194,103 @@ func (s *Server) handleEncodeSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusCreated, job)
 }
 
+// handleHDRDetectSource creates an hdr_detect job for the source.  The job
+// runs ffprobe (and optionally dovi_tool) on the agent, then the controller
+// parses the result and updates sources.hdr_type / sources.dv_profile.
+//
+// POST /api/v1/sources/{id}/hdr-detect
+func (s *Server) handleHDRDetectSource(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	_, err := s.store.GetSourceByID(r.Context(), id)
+	if errors.Is(err, db.ErrNotFound) {
+		writeProblem(w, r, http.StatusNotFound, "Not Found", "source not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get source for hdr_detect", "err", err, "source_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	job, err := s.store.CreateJob(r.Context(), db.CreateJobParams{
+		SourceID: id,
+		JobType:  "hdr_detect",
+		Priority: 0,
+	})
+	if err != nil {
+		s.logger.Error("create hdr_detect job", "err", err, "source_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	writeJSON(w, r, http.StatusCreated, map[string]any{
+		"job_id":    job.ID,
+		"source_id": id,
+		"status":    "queued",
+	})
+}
+
+// handleUpdateSourceHDR sets the hdr_type and dv_profile on a source.
+// Operators call this after running an hdr_detect analysis job or when
+// providing the values manually.
+//
+// PATCH /api/v1/sources/{id}/hdr
+// Body: { "hdr_type": "hdr10", "dv_profile": 0 }
+func (s *Server) handleUpdateSourceHDR(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req struct {
+		HDRType   string `json:"hdr_type"`
+		DVProfile int    `json:"dv_profile"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
+		return
+	}
+
+	// Validate hdr_type against the known set.
+	validHDRTypes := map[string]bool{
+		"":             true,
+		"hdr10":        true,
+		"hdr10+":       true,
+		"dolby_vision": true,
+		"hlg":          true,
+	}
+	if !validHDRTypes[req.HDRType] {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request",
+			"hdr_type must be one of: hdr10, hdr10+, dolby_vision, hlg, or empty string for SDR")
+		return
+	}
+	if req.DVProfile < 0 {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "dv_profile must be >= 0")
+		return
+	}
+
+	err := s.store.UpdateSourceHDR(r.Context(), db.UpdateSourceHDRParams{
+		ID:        id,
+		HDRType:   req.HDRType,
+		DVProfile: req.DVProfile,
+	})
+	if errors.Is(err, db.ErrNotFound) {
+		writeProblem(w, r, http.StatusNotFound, "Not Found", "source not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("update source hdr", "err", err, "source_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	source, err := s.store.GetSourceByID(r.Context(), id)
+	if err != nil {
+		s.logger.Error("get source after hdr update", "err", err, "source_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	writeJSON(w, r, http.StatusOK, source)
+}
+
 func (s *Server) handleDeleteSource(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	err := s.store.DeleteSource(r.Context(), id)

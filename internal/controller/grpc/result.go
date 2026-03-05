@@ -2,8 +2,11 @@ package grpc
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
+	"strings"
 
+	"github.com/badskater/distributed-encoder/internal/controller/engine"
 	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
@@ -109,6 +112,17 @@ func (s *Server) checkJobCompletion(ctx context.Context, jobID string) error {
 		slog.String("status", newStatus),
 	)
 
+	// For completed hdr_detect jobs, scan task stdout for the sentinel line
+	// and write the result back to the source.
+	if job.JobType == "hdr_detect" && newStatus == "completed" {
+		if err := s.extractHDRResult(ctx, job); err != nil {
+			s.logger.LogAttrs(ctx, slog.LevelWarn, "hdr_detect result extraction failed",
+				slog.String("job_id", jobID),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+
 	eventType := "job." + newStatus
 	s.webhooks.Emit(ctx, webhooks.Event{
 		Type: eventType,
@@ -119,5 +133,75 @@ func (s *Server) checkJobCompletion(ctx context.Context, jobID string) error {
 		},
 	})
 
+	return nil
+}
+
+// extractHDRResult scans the task stdout logs of a completed hdr_detect job
+// for the DE_HDR_RESULT sentinel line, parses it, and updates the source.
+func (s *Server) extractHDRResult(ctx context.Context, job *db.Job) error {
+	tasks, err := s.store.ListTasksByJob(ctx, job.ID)
+	if err != nil {
+		return err
+	}
+	if len(tasks) == 0 {
+		return nil
+	}
+	task := tasks[0]
+
+	// Fetch stdout logs in pages until the sentinel is found or logs are exhausted.
+	const pageSize = 500
+	var cursor int64
+	for {
+		logs, err := s.store.ListTaskLogs(ctx, db.ListTaskLogsParams{
+			TaskID:   task.ID,
+			Stream:   "stdout",
+			Cursor:   cursor,
+			PageSize: pageSize,
+		})
+		if err != nil {
+			return err
+		}
+
+		for _, l := range logs {
+			if !strings.HasPrefix(l.Message, engine.HDRResultSentinel) {
+				continue
+			}
+			raw := strings.TrimPrefix(l.Message, engine.HDRResultSentinel)
+			var result struct {
+				HDRType   string `json:"hdr_type"`
+				DVProfile int    `json:"dv_profile"`
+			}
+			if err := json.Unmarshal([]byte(raw), &result); err != nil {
+				s.logger.Warn("hdr_detect: failed to parse sentinel JSON",
+					"job_id", job.ID,
+					"raw", raw,
+					"error", err,
+				)
+				return nil
+			}
+			if err := s.store.UpdateSourceHDR(ctx, db.UpdateSourceHDRParams{
+				ID:        job.SourceID,
+				HDRType:   result.HDRType,
+				DVProfile: result.DVProfile,
+			}); err != nil {
+				return err
+			}
+			s.logger.LogAttrs(ctx, slog.LevelInfo, "source HDR metadata updated",
+				slog.String("source_id", job.SourceID),
+				slog.String("hdr_type", result.HDRType),
+				slog.Int("dv_profile", result.DVProfile),
+			)
+			return nil
+		}
+
+		if len(logs) < pageSize {
+			break
+		}
+		cursor = logs[len(logs)-1].ID
+	}
+
+	s.logger.LogAttrs(ctx, slog.LevelWarn, "hdr_detect: sentinel line not found in stdout logs",
+		slog.String("job_id", job.ID),
+	)
 	return nil
 }

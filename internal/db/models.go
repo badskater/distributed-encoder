@@ -68,6 +68,11 @@ type Source struct {
 	DetectedBy *string    `json:"detected_by,omitempty"`
 	State      string     `json:"state"`
 	VMafScore  *float64   `json:"vmaf_score,omitempty"`
+	// HDR metadata — populated by hdr_detect analysis jobs.
+	// HDRType: "hdr10", "hdr10+", "dolby_vision", "hlg", or "" for SDR/unknown.
+	HDRType   string `json:"hdr_type"`
+	// DVProfile: Dolby Vision profile number (5, 7, 8, 9 …) or 0 if no DV.
+	DVProfile int    `json:"dv_profile"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
@@ -248,6 +253,12 @@ type CreateSourceParams struct {
 	UNCPath    string
 	SizeBytes  int64
 	DetectedBy *string
+}
+
+type UpdateSourceHDRParams struct {
+	ID        string
+	HDRType   string
+	DVProfile int
 }
 
 type ListSourcesFilter struct {

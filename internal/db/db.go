@@ -48,6 +48,7 @@ type Store interface {
 	ListSources(ctx context.Context, filter ListSourcesFilter) ([]*Source, int64, error)
 	UpdateSourceState(ctx context.Context, id, state string) error
 	UpdateSourceVMAF(ctx context.Context, id string, score float64) error
+	UpdateSourceHDR(ctx context.Context, p UpdateSourceHDRParams) error
 	DeleteSource(ctx context.Context, id string) error
 
 	// --- Jobs ---

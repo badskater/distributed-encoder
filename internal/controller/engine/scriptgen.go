@@ -66,6 +66,63 @@ var templateFuncs = template.FuncMap{
 			return ""
 		}
 	},
+	// dvFlag returns x265 encoding flags for the given Dolby Vision profile string
+	// (e.g. "8" → "--dolby-vision-profile 8"). Returns "" for no DV (profile "0" or "").
+	"dvFlag": dvFlag,
+	// hdrFlag returns x265/ffmpeg flags for static HDR mastering metadata.
+	// Accepts "hdr10", "hdr10+", "dolby_vision", "hlg", or "" for SDR.
+	"hdrFlag": hdrFlag,
+	// dvBitstreamFilter returns the ffmpeg -bsf:v argument required to mux a
+	// Dolby Vision HEVC stream into a container (e.g. "hevc_mp4toannexb").
+	// Returns "" when no filter is needed.
+	"dvBitstreamFilter": dvBitstreamFilter,
+}
+
+// dvFlag returns the x265 flags required to encode or pass through a Dolby
+// Vision stream at the given profile number (supplied as a decimal string).
+// Profile 0 or empty string means no DV — returns "".
+func dvFlag(profile string) string {
+	switch profile {
+	case "5":
+		return "--dolby-vision-profile 5"
+	case "7":
+		return "--dolby-vision-profile 7"
+	case "8":
+		return "--dolby-vision-profile 8.1"
+	case "9":
+		return "--dolby-vision-profile 9"
+	default:
+		return ""
+	}
+}
+
+// hdrFlag returns the x265 flags that enable static HDR mastering data for
+// the given HDR type.  Returns "" for SDR / unknown types.
+func hdrFlag(hdrType string) string {
+	switch strings.ToLower(hdrType) {
+	case "hdr10":
+		return "--hdr10 --hdr10-opt"
+	case "hdr10+":
+		return "--hdr10 --hdr10-opt --dhdr10-opt"
+	case "dolby_vision":
+		return "--hdr10 --hdr10-opt"
+	case "hlg":
+		return "--transfer-characteristics arib-std-b67 --colorprim bt2020 --colormatrix bt2020nc"
+	default:
+		return ""
+	}
+}
+
+// dvBitstreamFilter returns the value to pass to ffmpeg's -bsf:v option when
+// muxing a Dolby Vision HEVC elementary stream.  Returns "" when no filter is
+// needed (e.g. for MKV output or non-DV streams).
+func dvBitstreamFilter(profile string) string {
+	switch profile {
+	case "5", "8", "9":
+		return "hevc_mp4toannexb"
+	default:
+		return ""
+	}
 }
 
 // escapeBat escapes characters that are special in Windows .bat files by
@@ -90,7 +147,7 @@ func uncPath(s string) string {
 // Render generates script files for a task and writes them to a new
 // subdirectory under baseDir/{jobID}/{chunkIndex:04d}/. It returns the path
 // of the created directory.
-func (g *ScriptGenerator) Render(ctx context.Context, job *db.Job, task *db.Task) (string, error) {
+func (g *ScriptGenerator) Render(ctx context.Context, job *db.Job, task *db.Task, source *db.Source) (string, error) {
 	// Validate chunk index against boundaries.
 	if task.ChunkIndex >= len(job.EncodeConfig.ChunkBoundaries) {
 		return "", fmt.Errorf("scriptgen: chunk index %d out of range (have %d boundaries)",
@@ -129,6 +186,8 @@ func (g *ScriptGenerator) Render(ctx context.Context, job *db.Job, task *db.Task
 	data["JOB_ID"] = job.ID
 	data["TASK_ID"] = task.ID
 	data["TOTAL_CHUNKS"] = strconv.Itoa(len(job.EncodeConfig.ChunkBoundaries))
+	data["HDR_TYPE"] = source.HDRType
+	data["DV_PROFILE"] = strconv.Itoa(source.DVProfile)
 
 	// 3. Create the output directory.
 	dir := filepath.Join(g.baseDir, job.ID, fmt.Sprintf("%04d", task.ChunkIndex))
@@ -179,7 +238,7 @@ func (g *ScriptGenerator) Render(ctx context.Context, job *db.Job, task *db.Task
 
 // RenderSingle generates script files for a non-chunked job (analysis, audio).
 // Unlike Render, it does not require chunk boundaries.
-func (g *ScriptGenerator) RenderSingle(ctx context.Context, job *db.Job, task *db.Task) (string, error) {
+func (g *ScriptGenerator) RenderSingle(ctx context.Context, job *db.Job, task *db.Task, source *db.Source) (string, error) {
 	if job.EncodeConfig.RunScriptTemplateID == "" {
 		// No run script template: nothing to render, return an empty dir.
 		dir := filepath.Join(g.baseDir, job.ID, "0000")
@@ -210,6 +269,8 @@ func (g *ScriptGenerator) RenderSingle(ctx context.Context, job *db.Job, task *d
 	data["JOB_ID"] = job.ID
 	data["TASK_ID"] = task.ID
 	data["JOB_TYPE"] = job.JobType
+	data["HDR_TYPE"] = source.HDRType
+	data["DV_PROFILE"] = strconv.Itoa(source.DVProfile)
 
 	dir := filepath.Join(g.baseDir, job.ID, "0000")
 	if err := os.MkdirAll(dir, 0o755); err != nil {

@@ -269,20 +269,20 @@ func (s *pgStore) CreateSource(ctx context.Context, p CreateSourceParams) (*Sour
 		INSERT INTO sources (filename, unc_path, size_bytes, detected_by)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-		          created_at, updated_at`
+		          hdr_type, dv_profile, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q, p.Filename, p.UNCPath, p.SizeBytes, p.DetectedBy)
 	return scanSource(row)
 }
 
 func (s *pgStore) GetSourceByID(ctx context.Context, id string) (*Source, error) {
 	const q = `SELECT id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-	                  created_at, updated_at FROM sources WHERE id = $1`
+	                  hdr_type, dv_profile, created_at, updated_at FROM sources WHERE id = $1`
 	return scanSource(s.pool.QueryRow(ctx, q, id))
 }
 
 func (s *pgStore) GetSourceByUNCPath(ctx context.Context, uncPath string) (*Source, error) {
 	const q = `SELECT id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-	                  created_at, updated_at FROM sources WHERE unc_path = $1`
+	                  hdr_type, dv_profile, created_at, updated_at FROM sources WHERE unc_path = $1`
 	return scanSource(s.pool.QueryRow(ctx, q, uncPath))
 }
 
@@ -304,7 +304,7 @@ func (s *pgStore) ListSources(ctx context.Context, f ListSourcesFilter) ([]*Sour
 	}
 
 	q := `SELECT id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-	             created_at, updated_at FROM sources`
+	             hdr_type, dv_profile, created_at, updated_at FROM sources`
 	args := []any{}
 	argN := 1
 
@@ -360,6 +360,18 @@ func (s *pgStore) UpdateSourceVMAF(ctx context.Context, id string, score float64
 	return err
 }
 
+func (s *pgStore) UpdateSourceHDR(ctx context.Context, p UpdateSourceHDRParams) error {
+	const q = `UPDATE sources SET hdr_type = $2, dv_profile = $3, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, p.ID, p.HDRType, p.DVProfile)
+	if err != nil {
+		return fmt.Errorf("db: update source hdr: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *pgStore) DeleteSource(ctx context.Context, id string) error {
 	const q = `DELETE FROM sources WHERE id = $1`
 	ct, err := s.pool.Exec(ctx, q, id)
@@ -377,6 +389,7 @@ func scanSource(row pgx.Row) (*Source, error) {
 	err := row.Scan(
 		&src.ID, &src.Filename, &src.UNCPath, &src.SizeBytes,
 		&src.DetectedBy, &src.State, &src.VMafScore,
+		&src.HDRType, &src.DVProfile,
 		&src.CreatedAt, &src.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
