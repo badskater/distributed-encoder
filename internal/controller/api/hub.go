@@ -40,8 +40,13 @@ type Hub struct {
 
 // wsClient wraps a single WebSocket connection.
 type wsClient struct {
-	conn *websocket.Conn
-	send chan HubEvent
+	conn      *websocket.Conn
+	send      chan HubEvent
+	closeOnce sync.Once
+}
+
+func (c *wsClient) close() {
+	c.closeOnce.Do(func() { c.conn.Close() })
 }
 
 // NewHub creates a Hub ready to accept connections and broadcast events.
@@ -118,7 +123,7 @@ func (h *Hub) writePump(c *wsClient) {
 	ticker := time.NewTicker(wsPingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		c.close()
 	}()
 
 	for {
@@ -154,7 +159,7 @@ func (h *Hub) readPump(c *wsClient) {
 		h.mu.Lock()
 		delete(h.clients, c)
 		h.mu.Unlock()
-		c.conn.Close()
+		c.close()
 	}()
 
 	c.conn.SetReadLimit(wsMaxMsgSize)

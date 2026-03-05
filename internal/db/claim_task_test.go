@@ -79,6 +79,21 @@ func TestClaimNextTask_NoDuplicates(t *testing.T) {
 		}
 	}
 
+	// Create agents so that tasks.agent_id (UUID FK → agents) can be satisfied.
+	agentIDs := make([]string, numAgents)
+	for a := range numAgents {
+		agent, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
+			Name:      fmt.Sprintf("concurrency-test-agent-%d", a),
+			Hostname:  fmt.Sprintf("host-%d", a),
+			IPAddress: "127.0.0.1",
+			Tags:      []string{},
+		})
+		if err != nil {
+			t.Fatalf("create agent %d: %v", a, err)
+		}
+		agentIDs[a] = agent.ID
+	}
+
 	// All agents use the empty tag set (matches any job).
 	tags := []string{}
 
@@ -105,7 +120,7 @@ func TestClaimNextTask_NoDuplicates(t *testing.T) {
 				}
 				results <- result{agentID: agentID, taskID: task.ID}
 			}
-		}(fmt.Sprintf("agent-%d", a))
+		}(agentIDs[a])
 	}
 	wg.Wait()
 	close(results)
@@ -160,8 +175,28 @@ func TestClaimNextTask_TagFiltering(t *testing.T) {
 		t.Fatalf("create task: %v", err)
 	}
 
+	// Create agents so that tasks.agent_id (UUID FK → agents) can be satisfied.
+	agentNoGPU, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
+		Name:      "tag-test-agent-cpu",
+		Hostname:  "host-cpu",
+		IPAddress: "127.0.0.1",
+		Tags:      []string{"cpu"},
+	})
+	if err != nil {
+		t.Fatalf("create cpu agent: %v", err)
+	}
+	agentGPU, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
+		Name:      "tag-test-agent-gpu",
+		Hostname:  "host-gpu",
+		IPAddress: "127.0.0.1",
+		Tags:      []string{"gpu"},
+	})
+	if err != nil {
+		t.Fatalf("create gpu agent: %v", err)
+	}
+
 	// Agent without "gpu" tag must not claim the task.
-	task, err := store.ClaimNextTask(ctx, "agent-no-gpu", []string{"cpu"})
+	task, err := store.ClaimNextTask(ctx, agentNoGPU.ID, []string{"cpu"})
 	if err != nil {
 		t.Fatalf("claim (no-gpu): %v", err)
 	}
@@ -170,7 +205,7 @@ func TestClaimNextTask_TagFiltering(t *testing.T) {
 	}
 
 	// Agent with "gpu" tag must claim it.
-	task, err = store.ClaimNextTask(ctx, "agent-gpu", []string{"gpu"})
+	task, err = store.ClaimNextTask(ctx, agentGPU.ID, []string{"gpu"})
 	if err != nil {
 		t.Fatalf("claim (gpu): %v", err)
 	}
