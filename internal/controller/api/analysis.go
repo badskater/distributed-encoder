@@ -61,7 +61,11 @@ func (s *Server) handleGetAnalysisResult(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Decode summary from raw JSON bytes so it embeds cleanly in the response.
+	// Decode JSONB fields so they embed cleanly in the response (not base64).
+	var frameData json.RawMessage
+	if result.FrameData != nil {
+		frameData = json.RawMessage(result.FrameData)
+	}
 	var summary json.RawMessage
 	if result.Summary != nil {
 		summary = json.RawMessage(result.Summary)
@@ -71,7 +75,7 @@ func (s *Server) handleGetAnalysisResult(w http.ResponseWriter, r *http.Request)
 		"id":         result.ID,
 		"source_id":  result.SourceID,
 		"type":       result.Type,
-		"frame_data": result.FrameData,
+		"frame_data": frameData,
 		"summary":    summary,
 		"created_at": result.CreatedAt,
 	})

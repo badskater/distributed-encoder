@@ -85,7 +85,7 @@ export const listJobs = (status?: string, search?: string) =>
 export const listJobsPaged = (params: { status?: string; search?: string; cursor?: string; page_size?: number }) =>
   requestCollection<Job>(`/jobs${buildQuery(params)}`)
 
-export const getJob = (id: string) => request<Job>(`/jobs/${id}`)
+export const getJob = (id: string) => request<{ job: Job; tasks: Task[] }>(`/jobs/${id}`)
 
 export interface CreateJobRequest {
   source_id: string

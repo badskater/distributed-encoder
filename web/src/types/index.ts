@@ -2,6 +2,7 @@ export interface Job {
   id: string
   source_id: string
   source_path: string
+  job_type: string
   status: 'queued' | 'assigned' | 'running' | 'completed' | 'failed' | 'cancelled'
   priority: number
   tasks_total: number
@@ -21,9 +22,9 @@ export interface Task {
   chunk_index: number
   exit_code: number | null
   error_msg: string | null
-  frames_encoded: number
-  avg_fps: number
-  output_size: number
+  frames_encoded: number | null
+  avg_fps: number | null
+  output_size: number | null
   started_at: string | null
   completed_at: string | null
   created_at: string
@@ -118,15 +119,32 @@ export interface LogEntry {
   timestamp: string
 }
 
+export interface AnalysisFramePoint {
+  frame: number
+  score?: number
+  pts?: number
+}
+
+export interface AnalysisSummary {
+  mean?: number
+  min?: number
+  max?: number
+  psnr?: number
+  ssim?: number
+  width?: number
+  height?: number
+  duration_sec?: number
+  frame_count?: number
+  codec?: string
+  bit_rate?: number
+  scene_count?: number
+}
+
 export interface AnalysisResult {
   id: string
   source_id: string
-  vmaf_score: number | null
-  psnr: number | null
-  ssim: number | null
-  width: number | null
-  height: number | null
-  duration_sec: number | null
-  frame_count: number | null
+  type: string
+  frame_data?: AnalysisFramePoint[] | null
+  summary?: AnalysisSummary | null
   created_at: string
 }

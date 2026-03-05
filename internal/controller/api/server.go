@@ -86,6 +86,7 @@ func (s *Server) Serve(ctx context.Context) error {
 func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	// Unauthenticated
 	mux.HandleFunc("GET /health", s.handleHealth)
+	mux.HandleFunc("GET /metrics", s.handleMetrics)
 	mux.HandleFunc("GET /api/v1/openapi.json", s.handleOpenAPISpec)
 
 	// Setup wizard — unauthenticated, functional only before first admin exists

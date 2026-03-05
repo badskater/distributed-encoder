@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import * as api from '../api/client'
-import type { Job } from '../types'
+import type { Job, Task } from '../types'
 import StatusBadge from '../components/StatusBadge'
 import ProgressBar from '../components/ProgressBar'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+
+function fmtBytes(n: number) {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + ' GB'
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + ' MB'
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + ' KB'
+  return n + ' B'
+}
 
 function fmtDate(s: string) {
   return new Date(s).toLocaleString()
@@ -23,6 +30,7 @@ export default function JobDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [job, setJob] = useState<Job | null>(null)
+  const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
@@ -30,8 +38,9 @@ export default function JobDetail() {
   const load = useCallback(async () => {
     if (!id) return
     try {
-      const j = await api.getJob(id)
+      const { job: j, tasks: t } = await api.getJob(id)
       setJob(j)
+      setTasks(t)
       setError('')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -83,6 +92,7 @@ export default function JobDetail() {
       <div className="bg-th-surface rounded-lg shadow p-4">
         <h2 className="text-sm font-semibold text-th-text-secondary mb-2">Job Details</h2>
         <Row label="ID" value={<span className="font-mono text-xs">{job.id}</span>} />
+        <Row label="Type" value={<span className="capitalize">{job.job_type}</span>} />
         <Row label="Source" value={<span className="font-mono text-xs break-all">{job.source_path}</span>} />
         <Row label="Priority" value={job.priority} />
         <Row label="Created" value={fmtDate(job.created_at)} />
@@ -127,15 +137,69 @@ export default function JobDetail() {
         )}
       </div>
 
-      {job.tasks_total > 0 && (
-        <div className="bg-th-surface rounded-lg shadow p-4">
-          <h2 className="text-sm font-semibold text-th-text-secondary mb-2">Tasks</h2>
-          <p className="text-sm text-th-text-muted">
-            This job has {job.tasks_total} task{job.tasks_total !== 1 ? 's' : ''}.
-            Navigate to <span className="font-mono text-xs">/tasks/&#123;task_id&#125;</span> to view individual task logs and details.
-          </p>
+      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
+        <div className="px-4 py-3 border-b border-th-border">
+          <h2 className="text-sm font-semibold text-th-text-secondary">
+            Tasks ({tasks.length})
+          </h2>
         </div>
-      )}
+
+        {tasks.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-th-text-muted">
+            {job.tasks_total === 0
+              ? 'No tasks created yet — the engine will expand this job shortly.'
+              : 'No task data available.'}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-th-border bg-th-surface-muted">
+                  <th className="text-left px-4 py-2 text-xs text-th-text-muted font-medium">#</th>
+                  <th className="text-left px-4 py-2 text-xs text-th-text-muted font-medium">Status</th>
+                  <th className="text-left px-4 py-2 text-xs text-th-text-muted font-medium">Agent</th>
+                  <th className="text-right px-4 py-2 text-xs text-th-text-muted font-medium">Frames</th>
+                  <th className="text-right px-4 py-2 text-xs text-th-text-muted font-medium">Size</th>
+                  <th className="text-left px-4 py-2 text-xs text-th-text-muted font-medium">Error</th>
+                  <th className="px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-th-border-subtle">
+                {tasks.map(task => (
+                  <tr key={task.id} className="hover:bg-th-surface-muted transition-colors">
+                    <td className="px-4 py-2 text-th-text-muted">{task.chunk_index}</td>
+                    <td className="px-4 py-2"><StatusBadge status={task.status} /></td>
+                    <td className="px-4 py-2 font-mono text-xs text-th-text-muted">
+                      {task.agent_id ? task.agent_id.slice(0, 8) + '…' : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right text-th-text-muted">
+                      {task.frames_encoded != null && task.frames_encoded > 0
+                        ? task.frames_encoded.toLocaleString()
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right text-th-text-muted">
+                      {task.output_size != null && task.output_size > 0
+                        ? fmtBytes(task.output_size)
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-red-600 text-xs truncate max-w-[180px]">
+                      {task.error_msg ?? ''}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <Link
+                        to={`/tasks/${task.id}`}
+                        className="text-blue-600 hover:underline text-xs whitespace-nowrap"
+                      >
+                        View logs →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

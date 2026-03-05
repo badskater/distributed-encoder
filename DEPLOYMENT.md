@@ -1020,3 +1020,97 @@ The web UI is served at `http://<controller-host>:8080` after login.
 - Use the **Preview** button in the template editor before saving — it validates Go `text/template` syntax and shows rendered output for a sample payload.
 - A broken template causes all new jobs to fail at the script-generation step. Use the **Preview** feature to catch errors before they reach production.
 - Variables are injected at render time. Changes to a variable value take effect on the next job submission — existing queued jobs use the values that were current at submission time.
+
+---
+
+## 12. Backup and Restore
+
+The controller's only stateful component is the **PostgreSQL database**. Agent work directories (script files) are ephemeral and re-created on job retry. NAS/SAN source and output files are outside the controller's responsibility.
+
+### 12.1 Backup Strategy
+
+#### Recommended: `pg_dump` daily snapshot
+
+Run as the `postgres` OS user (or any user with CONNECT privilege):
+
+```bash
+pg_dump \
+  --format=custom \
+  --compress=9 \
+  --file=/backups/distencoder_$(date +%Y%m%d_%H%M%S).pgdump \
+  "postgres://distencoder:<password>@localhost:5432/distencoder"
+```
+
+Store backups outside the database host (remote share, object storage, off-site).
+
+**Suggested schedule (cron):**
+```cron
+# Daily backup at 02:00, keep 14 days
+0 2 * * * postgres pg_dump --format=custom --compress=9 \
+  --file=/backups/distencoder_$(date +\%Y\%m\%d).pgdump \
+  "postgres://distencoder:<password>@localhost:5432/distencoder" \
+  && find /backups -name 'distencoder_*.pgdump' -mtime +14 -delete
+```
+
+#### Alternative: WAL archiving (point-in-time recovery)
+
+For production deployments or Patroni HA clusters, enable WAL archiving in `postgresql.conf`:
+
+```ini
+wal_level = replica
+archive_mode = on
+archive_command = 'test ! -f /wal_archive/%f && cp %p /wal_archive/%f'
+```
+
+Combine with a base backup:
+```bash
+pg_basebackup -D /backups/base_$(date +%Y%m%d) -Ft -z -P \
+  -h localhost -U replication_user
+```
+
+### 12.2 Restore
+
+#### From a `pg_dump` archive
+
+```bash
+# 1. Stop the controller to prevent new writes.
+systemctl stop distencoder-controller   # or docker compose stop controller
+
+# 2. Drop and recreate the database (or restore into a fresh DB).
+psql -U postgres -c "DROP DATABASE IF EXISTS distencoder;"
+psql -U postgres -c "CREATE DATABASE distencoder OWNER distencoder;"
+
+# 3. Restore.
+pg_restore \
+  --dbname="postgres://distencoder:<password>@localhost:5432/distencoder" \
+  --verbose \
+  /backups/distencoder_20250101_020000.pgdump
+
+# 4. Restart the controller (it will run migrations automatically on start).
+systemctl start distencoder-controller
+```
+
+#### Verify restore
+
+```bash
+psql "postgres://distencoder:<password>@localhost:5432/distencoder" \
+  -c "SELECT status, COUNT(*) FROM jobs GROUP BY status;"
+```
+
+### 12.3 What Is Not Backed Up
+
+| Data | Location | Notes |
+|---|---|---|
+| Source video files | NAS/SAN UNC paths | Outside controller scope; backup at storage layer |
+| Encoded output files | NAS/SAN UNC paths | Outside controller scope |
+| Agent work directories | `C:\encoder-work\` on agents | Ephemeral; re-created on retry |
+| Controller binary / config | `/opt/distencoder/` | Re-deployable from release artifacts |
+| TLS certificates | `/etc/distencoder/certs/` | Back up separately or use cert-manager |
+
+### 12.4 Backup Checklist
+
+- [ ] `pg_dump` scheduled and retention policy confirmed
+- [ ] Backup files written to a host different from the database server
+- [ ] Restore procedure tested at least once (restore to a staging environment)
+- [ ] Alert on backup job failure (check exit code in cron/systemd)
+- [ ] WAL archiving considered for RPO < 1 day requirements
