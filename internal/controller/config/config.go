@@ -19,6 +19,7 @@ type Config struct {
 	TLS      TLSConfig      `mapstructure:"tls"`
 	Upgrade  UpgradeConfig  `mapstructure:"upgrade"`
 	VNC      VNCConfig      `mapstructure:"vnc"`
+	Analysis AnalysisConfig `mapstructure:"analysis"`
 }
 
 type ServerConfig struct {
@@ -95,6 +96,35 @@ type UpgradeConfig struct {
 	Version string `mapstructure:"version"`
 }
 
+// AnalysisConfig controls controller-side analysis execution (HDR detect,
+// scene scanning, VMAF, audio encoding).  When ffmpeg_bin / ffprobe_bin are
+// empty the binaries are looked up on PATH.  If neither is available and no
+// path_mappings are configured, analysis jobs fall back to agent dispatch.
+type AnalysisConfig struct {
+	// FFmpegBin is the path to the ffmpeg binary. Defaults to "ffmpeg" (PATH).
+	FFmpegBin string `mapstructure:"ffmpeg_bin"`
+	// FFprobeBin is the path to the ffprobe binary. Defaults to "ffprobe" (PATH).
+	FFprobeBin string `mapstructure:"ffprobe_bin"`
+	// DoviToolBin is the optional path to dovi_tool for DV profile detection.
+	DoviToolBin string `mapstructure:"dovi_tool_bin"`
+	// Concurrency limits simultaneous controller-side analysis processes.
+	// 0 = unlimited.
+	Concurrency int `mapstructure:"concurrency"`
+	// PathMappings seeds the DB with path mappings on startup.
+	// Use the API/UI to manage them at runtime.
+	PathMappings []PathMappingConfig `mapstructure:"path_mappings"`
+}
+
+// PathMappingConfig is a single UNC → Linux path mapping in the config file.
+type PathMappingConfig struct {
+	// Name is a human-readable label for this mapping.
+	Name string `mapstructure:"name"`
+	// Windows is the Windows UNC prefix, e.g. \\NAS01\media
+	Windows string `mapstructure:"windows"`
+	// Linux is the Linux mount prefix, e.g. /mnt/nas/media
+	Linux string `mapstructure:"linux"`
+}
+
 // VNCConfig controls the web-based VNC remote desktop feature.
 type VNCConfig struct {
 	// NoVNCBaseURL is the base URL from which the noVNC JavaScript client
@@ -133,6 +163,10 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("upgrade.bin_dir", "/var/lib/distributed-encoder/agent-bins")
 	v.SetDefault("upgrade.version", "0.0.0")
 	v.SetDefault("vnc.novnc_base_url", "https://unpkg.com/@novnc/novnc@1.5.0")
+	v.SetDefault("analysis.ffmpeg_bin", "")
+	v.SetDefault("analysis.ffprobe_bin", "")
+	v.SetDefault("analysis.dovi_tool_bin", "")
+	v.SetDefault("analysis.concurrency", 2)
 
 	v.AutomaticEnv()
 

@@ -51,3 +51,27 @@ tls:
   cert: "certs/controller.crt"
   key: "certs/controller.key"
   ca: "certs/ca.crt"
+
+# Controller-side analysis: runs HDR detect, scene scanning, VMAF, and audio
+# encoding directly on the controller using ffmpeg/ffprobe (requires the NAS
+# to be accessible as NFS mounts).  Leave ffmpeg_bin/ffprobe_bin empty to
+# auto-detect from PATH, or set explicit paths.
+#
+# path_mappings seeds the database on first startup.  After that, use the
+# web UI or API (/api/v1/path-mappings) to manage them at runtime.
+analysis:
+  ffmpeg_bin:    ""              # e.g. /usr/bin/ffmpeg
+  ffprobe_bin:   ""              # e.g. /usr/bin/ffprobe
+  dovi_tool_bin: ""              # optional: path to dovi_tool binary
+  concurrency:   2               # max simultaneous controller-side analysis jobs
+
+  path_mappings:
+    - name:    "NAS media"
+      windows: "\\\\NAS01\\media"
+      linux:   "/mnt/nas/media"
+    - name:    "NAS encodes"
+      windows: "\\\\NAS01\\encodes"
+      linux:   "/mnt/nas/encodes"
+    - name:    "NAS temp"
+      windows: "\\\\NAS01\\temp"
+      linux:   "/mnt/nas/temp"

@@ -15,12 +15,21 @@ type Config struct {
 	ScriptBaseDir    string
 }
 
+// AnalysisRunner is the interface used by the engine to execute analysis,
+// HDR-detect, and audio jobs on the controller host.
+type AnalysisRunner interface {
+	RunHDRDetect(ctx context.Context, job *db.Job, source *db.Source) error
+	RunAnalysis(ctx context.Context, job *db.Job, source *db.Source) error
+	RunAudio(ctx context.Context, job *db.Job, source *db.Source) error
+}
+
 // Engine orchestrates job expansion and stale-agent detection on a timer.
 type Engine struct {
-	store  db.Store
-	gen    *ScriptGenerator
-	cfg    Config
-	logger *slog.Logger
+	store    db.Store
+	gen      *ScriptGenerator
+	cfg      Config
+	logger   *slog.Logger
+	analysis AnalysisRunner // optional; nil falls back to agent dispatch
 }
 
 // New creates an Engine. Does not start the background loop.
@@ -31,6 +40,13 @@ func New(store db.Store, cfg Config, logger *slog.Logger) *Engine {
 		cfg:    cfg,
 		logger: logger,
 	}
+}
+
+// SetAnalysisRunner attaches a controller-side analysis runner.  When set,
+// analysis/hdr_detect/audio jobs run on the controller instead of being
+// dispatched to an agent.
+func (e *Engine) SetAnalysisRunner(r AnalysisRunner) {
+	e.analysis = r
 }
 
 // Start launches the background dispatch loop in a goroutine.

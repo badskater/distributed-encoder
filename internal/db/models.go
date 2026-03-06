@@ -197,6 +197,20 @@ type AnalysisResult struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// PathMapping is a row from the path_mappings table.
+// It maps Windows UNC path prefixes (e.g. \\NAS01\media) to Linux mount
+// path prefixes (e.g. /mnt/nas/media) so the controller can access NAS files
+// via its local NFS mounts when running analysis jobs.
+type PathMapping struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	WindowsPrefix string    `json:"windows_prefix"`
+	LinuxPrefix   string    `json:"linux_prefix"`
+	Enabled       bool      `json:"enabled"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 // Session is a row from the sessions table.
 type Session struct {
 	Token     string    `json:"-"`
@@ -400,4 +414,18 @@ type CreateEnrollmentTokenParams struct {
 type ConsumeEnrollmentTokenParams struct {
 	Token   string
 	AgentID string
+}
+
+type CreatePathMappingParams struct {
+	Name          string
+	WindowsPrefix string
+	LinuxPrefix   string
+}
+
+type UpdatePathMappingParams struct {
+	ID            string
+	Name          string
+	WindowsPrefix string
+	LinuxPrefix   string
+	Enabled       bool
 }

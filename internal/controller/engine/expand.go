@@ -25,7 +25,14 @@ func (e *Engine) expandPendingJobs(ctx context.Context) error {
 }
 
 // expandJob dispatches to the appropriate expansion strategy based on job type.
+// When an AnalysisRunner is configured, analysis/hdr_detect/audio jobs run
+// directly on the controller host instead of being dispatched to an agent.
 func (e *Engine) expandJob(ctx context.Context, job *db.Job) error {
+	// Route analysis-type jobs to the controller runner when available.
+	if e.analysis != nil && isControllerAnalysisJob(job.JobType) {
+		return e.expandControllerAnalysisJob(ctx, job)
+	}
+
 	switch job.JobType {
 	case "encode":
 		return e.expandEncodeJob(ctx, job)
@@ -37,6 +44,60 @@ func (e *Engine) expandJob(ctx context.Context, job *db.Job) error {
 		e.logger.Error("engine: unknown job type, skipping", "job_id", job.ID, "job_type", job.JobType)
 		return nil
 	}
+}
+
+// expandControllerAnalysisJob runs an analysis/hdr_detect/audio job directly
+// on the controller.  It sets the job status to "running" synchronously, then
+// launches a goroutine that calls the AnalysisRunner and marks the job as
+// "completed" or "failed" when done.
+func (e *Engine) expandControllerAnalysisJob(ctx context.Context, job *db.Job) error {
+	source, err := e.store.GetSourceByID(ctx, job.SourceID)
+	if err != nil {
+		return fmt.Errorf("engine: controller analysis get source %s: %w", job.SourceID, err)
+	}
+
+	// Transition to "running" immediately so the job is not re-picked-up.
+	if err := e.store.UpdateJobStatus(ctx, job.ID, "running"); err != nil {
+		return fmt.Errorf("engine: controller analysis set running: %w", err)
+	}
+
+	go func() {
+		var runErr error
+		switch job.JobType {
+		case "hdr_detect":
+			runErr = e.analysis.RunHDRDetect(ctx, job, source)
+		case "analysis":
+			runErr = e.analysis.RunAnalysis(ctx, job, source)
+		case "audio":
+			runErr = e.analysis.RunAudio(ctx, job, source)
+		}
+
+		if runErr != nil {
+			e.logger.Error("engine: controller analysis job failed",
+				"job_id", job.ID, "job_type", job.JobType, "error", runErr)
+			_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+			return
+		}
+
+		if err := e.store.UpdateJobStatus(ctx, job.ID, "completed"); err != nil {
+			e.logger.Error("engine: set job completed", "job_id", job.ID, "error", err)
+		} else {
+			e.logger.Info("engine: controller analysis job completed",
+				"job_id", job.ID, "job_type", job.JobType)
+		}
+	}()
+
+	return nil
+}
+
+// isControllerAnalysisJob reports whether job type is handled by the
+// controller-side AnalysisRunner.
+func isControllerAnalysisJob(jobType string) bool {
+	switch jobType {
+	case "analysis", "hdr_detect", "audio":
+		return true
+	}
+	return false
 }
 
 // expandEncodeJob creates tasks for a multi-chunk encode job.

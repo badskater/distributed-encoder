@@ -178,6 +178,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("PUT /api/v1/variables/{name}", admin(s.handleUpsertVariable))
 	mux.Handle("DELETE /api/v1/variables/{id}", admin(s.handleDeleteVariable))
 
+	// --- Path Mappings (UNC ↔ Linux NFS mount translation) ---
+	mux.Handle("GET /api/v1/path-mappings", viewer(s.handleListPathMappings))
+	mux.Handle("POST /api/v1/path-mappings", admin(s.handleCreatePathMapping))
+	mux.Handle("GET /api/v1/path-mappings/{id}", viewer(s.handleGetPathMapping))
+	mux.Handle("PUT /api/v1/path-mappings/{id}", admin(s.handleUpdatePathMapping))
+	mux.Handle("DELETE /api/v1/path-mappings/{id}", admin(s.handleDeletePathMapping))
+
 	// --- Webhooks ---
 	mux.Handle("GET /api/v1/webhooks", admin(s.handleListWebhooks))
 	mux.Handle("GET /api/v1/webhooks/{id}", admin(s.handleGetWebhook))

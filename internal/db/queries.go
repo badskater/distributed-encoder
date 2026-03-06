@@ -1441,3 +1441,75 @@ func (s *pgStore) PruneOldTaskLogs(ctx context.Context, olderThan time.Time) err
 func (s *pgStore) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)
 }
+
+// ---------------------------------------------------------------------------
+// Path Mappings
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreatePathMapping(ctx context.Context, p CreatePathMappingParams) (*PathMapping, error) {
+	const q = `
+		INSERT INTO path_mappings (name, windows_prefix, linux_prefix)
+		VALUES ($1, $2, $3)
+		RETURNING id, name, windows_prefix, linux_prefix, enabled, created_at, updated_at`
+	return scanPathMapping(s.pool.QueryRow(ctx, q, p.Name, p.WindowsPrefix, p.LinuxPrefix))
+}
+
+func (s *pgStore) GetPathMappingByID(ctx context.Context, id string) (*PathMapping, error) {
+	const q = `SELECT id, name, windows_prefix, linux_prefix, enabled, created_at, updated_at
+	           FROM path_mappings WHERE id = $1`
+	return scanPathMapping(s.pool.QueryRow(ctx, q, id))
+}
+
+func (s *pgStore) ListPathMappings(ctx context.Context) ([]*PathMapping, error) {
+	const q = `SELECT id, name, windows_prefix, linux_prefix, enabled, created_at, updated_at
+	           FROM path_mappings ORDER BY name`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list path mappings: %w", err)
+	}
+	defer rows.Close()
+	var out []*PathMapping
+	for rows.Next() {
+		m, err := scanPathMapping(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) UpdatePathMapping(ctx context.Context, p UpdatePathMappingParams) (*PathMapping, error) {
+	const q = `UPDATE path_mappings
+	           SET name = $2, windows_prefix = $3, linux_prefix = $4, enabled = $5, updated_at = now()
+	           WHERE id = $1
+	           RETURNING id, name, windows_prefix, linux_prefix, enabled, created_at, updated_at`
+	return scanPathMapping(s.pool.QueryRow(ctx, q, p.ID, p.Name, p.WindowsPrefix, p.LinuxPrefix, p.Enabled))
+}
+
+func (s *pgStore) DeletePathMapping(ctx context.Context, id string) error {
+	const q = `DELETE FROM path_mappings WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: delete path mapping: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func scanPathMapping(row pgx.Row) (*PathMapping, error) {
+	var m PathMapping
+	err := row.Scan(
+		&m.ID, &m.Name, &m.WindowsPrefix, &m.LinuxPrefix,
+		&m.Enabled, &m.CreatedAt, &m.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan path mapping: %w", err)
+	}
+	return &m, nil
+}

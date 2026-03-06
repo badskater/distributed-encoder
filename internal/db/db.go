@@ -104,6 +104,13 @@ type Store interface {
 	GetAnalysisResult(ctx context.Context, sourceID, analysisType string) (*AnalysisResult, error)
 	ListAnalysisResults(ctx context.Context, sourceID string) ([]*AnalysisResult, error)
 
+	// --- Path Mappings ---
+	CreatePathMapping(ctx context.Context, p CreatePathMappingParams) (*PathMapping, error)
+	GetPathMappingByID(ctx context.Context, id string) (*PathMapping, error)
+	ListPathMappings(ctx context.Context) ([]*PathMapping, error)
+	UpdatePathMapping(ctx context.Context, p UpdatePathMappingParams) (*PathMapping, error)
+	DeletePathMapping(ctx context.Context, id string) error
+
 	// --- Sessions ---
 	CreateSession(ctx context.Context, p CreateSessionParams) (*Session, error)
 	GetSessionByToken(ctx context.Context, token string) (*Session, error)

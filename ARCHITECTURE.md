@@ -116,6 +116,9 @@ A distributed video encoding system that offloads encoding tasks from a central 
 │                                                                  │
 │   \\NAS01\media\         \\NAS01\encodes\       \\NAS01\temp\   │
 │   (source m2ts)          (encoded output)       (work files)    │
+│                                                                  │
+│   Also mounted on controller via NFS:                           │
+│   /mnt/nas/media   /mnt/nas/encodes   /mnt/nas/temp             │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -275,8 +278,17 @@ The Controller is the single source of truth. It runs on **Ubuntu 22.04+** bare-
 │  │                                         │  └────────────────┘  │   │   │
 │  │                                         └──────────────────────┘   │   │
 │  └────────────────────────────────────────────────────────────────────┘   │
-│                                 │                                         │
-│                                 ▼                                         │
+│                                 │                       ▲               │
+│                                 ▼          NFS mount    │               │
+│  ┌─── Analysis Runner ─────────────────────────────────────────────┐   │
+│  │   (internal/controller/analysis)       /mnt/nas/...             │   │
+│  │   ┌─────────────────┐  ┌───────────────────┐  ┌─────────────┐  │   │
+│  │   │  HDR Detect     │  │ Scene + Stream    │  │ Audio Enc   │  │   │
+│  │   │  (ffprobe JSON) │  │ (ffprobe/ffmpeg)  │  │ (ffmpeg -vn)│  │   │
+│  │   └─────────────────┘  └───────────────────┘  └─────────────┘  │   │
+│  │   Path Mappings: \\NAS\share → /mnt/nas/share  (DB + config)   │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
 │  ┌─── Data Layer ───────────────────────────────────────────────────────┐ │
 │  │   ┌──────────────────────────────────────────────────────────────┐   │ │
 │  │   │  PostgreSQL Connection Pool (pgx)                            │   │ │
@@ -624,7 +636,7 @@ Transport: **mTLS** on port `9443`. Certificates auto-provisioned on first agent
 |---|---|
 | **Job Scheduler** | Priority queue (FIFO default, priority override). Assigns tasks to agents respecting the **1-task-per-agent** rule. Tracks job states (see diagram and algorithm below). |
 | **Script Generator** | Renders `.avs` (AviSynth), `.vpy` (VapourSynth), and `.bat` files from Go templates. Injects global variables, UNC source paths, encoder CLI flags, output paths. |
-| **Analysis Coordinator** | Dispatches histogram and VMAF analysis requests to agents (or runs locally if ffmpeg/vmaf are available on the controller). Stores per-frame results in PostgreSQL JSONB columns. |
+| **Analysis Coordinator** | Routes `hdr_detect`, `analysis`, and `audio` jobs. When an `AnalysisRunner` is configured, executes them directly on the controller via ffprobe/ffmpeg (NFS path). Otherwise dispatches to a Windows agent. Stores results in `analysis_results` JSONB rows. See §3.1.3a. |
 | **Template Engine** | Go `text/template` with custom functions (`uncPath`, `escapeBat`, `gpuFlag`, etc.). Templates stored in DB, editable via web UI. |
 | **Variable Store** | Key-value global variables (e.g. `ENCODER_PATH`, `X265_PARAMS`, `OUTPUT_ROOT`). Injected at script-generation time. Exposed as `%VAR_NAME%` in `.bat` and as constants in `.avs`/`.vpy`. |
 | **Queue Manager** | Separate logical queues: `encode`, `analysis`, `audio`, `hdr_detect`. Configurable concurrency per queue (default: 1 per agent). |
@@ -724,6 +736,86 @@ There are **no automatic retries**. An operator must manually re-queue failed ta
 When manually retried:
 - Only **failed/timed-out** tasks are re-queued as `pending` — completed tasks are not re-run.
 - A user can **cancel** a job — all its pending tasks are cancelled and running tasks are left to finish.
+
+#### 3.1.3a Controller-Side Analysis & Path Mappings
+
+Analysis jobs (`hdr_detect`, `analysis`, `audio`) can execute directly on the controller host instead of being dispatched to a Windows agent. This requires the NAS to be accessible via NFS/CIFS mounts on the controller and `ffmpeg`/`ffprobe` to be installed.
+
+**Analysis Runner** (`internal/controller/analysis`):
+
+| Method | Job Type | Description |
+|---|---|---|
+| `RunHDRDetect` | `hdr_detect` | Runs `ffprobe -of json` on the source, parses `color_transfer`, `codec_tag_string`, and `side_data_list` to determine HDR type (`hdr10`, `hdr10+`, `hlg`, `dolby_vision`). Optionally runs `dovi_tool info` to identify the exact Dolby Vision profile number. Updates the `sources` table via `UpdateSourceHDR`. |
+| `RunAnalysis` | `analysis` | Runs `ffprobe -show_streams -show_format` (stream metadata) and `ffmpeg select/metadata` filter (scene detection) in sequence. Stores results in `analysis_results` as `stream_info` and `scene` rows. |
+| `RunAudio` | `audio` | Extracts and encodes audio with `ffmpeg -vn`. Target format (`flac`, `opus`, `aac`) comes from `ExtraVars["AUDIO_FORMAT"]`, defaulting to FLAC. Output is written to `OutputRoot` (or next to the source if unset). |
+
+When the `AnalysisRunner` is configured on the engine (`Engine.SetAnalysisRunner`), `expandJob` routes `hdr_detect`/`analysis`/`audio` jobs to the controller runner instead of dispatching a task to a Windows agent. The engine sets the job status to `running` synchronously, then executes the work in a goroutine — marking `completed` or `failed` when done.
+
+**Concurrency:** A semaphore (`chan struct{}`) limits simultaneous controller-side analysis jobs (configured via `analysis.concurrency`, default 2).
+
+**Fallback:** If no `AnalysisRunner` is set (e.g. controller has no NFS access or no ffmpeg), the engine falls back to the existing agent-dispatch path.
+
+**Crash recovery note:** If the controller restarts while an analysis job is in `running` state, the job will be stuck. An operator can manually re-queue via `POST /jobs/{id}/retry`.
+
+---
+
+**Path Mappings** (`path_mappings` table, `internal/controller/api/pathmappings.go`):
+
+Path mappings translate Windows UNC paths (used by agents) to Linux POSIX paths (accessible on the controller via NFS). This lets the analysis runner find source files even when they were registered via UNC.
+
+```
+\\NAS01\media\movies\foo.m2ts  →  /mnt/nas/media/movies/foo.m2ts
+```
+
+**Translation rules:**
+- UNC path matching is **case-insensitive** (Windows convention).
+- The matched Windows prefix is stripped and replaced with the Linux prefix.
+- Backslashes are converted to forward slashes in the remainder.
+- Only the first matching enabled mapping is applied.
+- Paths that match no mapping are returned unchanged.
+
+**DB table:**
+
+```sql
+path_mappings (
+    id             UUID PRIMARY KEY,
+    name           TEXT NOT NULL,          -- human-readable label
+    windows_prefix TEXT NOT NULL,          -- e.g. \\NAS01\media
+    linux_prefix   TEXT NOT NULL,          -- e.g. /mnt/nas/media
+    enabled        BOOLEAN NOT NULL DEFAULT true,
+    created_at     TIMESTAMPTZ,
+    updated_at     TIMESTAMPTZ
+)
+```
+
+**Bootstrap:** On startup, `bootstrapPathMappings` reads `analysis.path_mappings` from `controller.yaml` and inserts any missing entries by name (idempotent — existing names are skipped to preserve operator changes made via UI/API).
+
+**REST API endpoints:**
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/api/v1/path-mappings` | viewer+ | List all path mappings |
+| POST | `/api/v1/path-mappings` | admin | Create a new mapping |
+| GET | `/api/v1/path-mappings/{id}` | viewer+ | Get a single mapping |
+| PUT | `/api/v1/path-mappings/{id}` | admin | Update name, prefixes, or enabled flag |
+| DELETE | `/api/v1/path-mappings/{id}` | admin | Delete a mapping |
+
+**Config (`controller.yaml`):**
+
+```yaml
+analysis:
+  ffmpeg_bin:    ""              # leave empty to auto-detect from PATH
+  ffprobe_bin:   ""
+  dovi_tool_bin: ""              # optional; enables exact DV profile detection
+  concurrency:   2
+
+  path_mappings:                 # seeded to DB on first startup only
+    - name:    "NAS media"
+      windows: "\\\\NAS01\\media"
+      linux:   "/mnt/nas/media"
+```
+
+---
 
 #### 3.1.4 Webhook Service
 

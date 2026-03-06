@@ -23,6 +23,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/badskater/distributed-encoder/internal/controller/analysis"
 	"github.com/badskater/distributed-encoder/internal/controller/api"
 	"github.com/badskater/distributed-encoder/internal/controller/auth"
 	"github.com/badskater/distributed-encoder/internal/controller/config"
@@ -145,12 +146,30 @@ func runServer(ctx context.Context, cfgPath string) error {
 		grpcErrCh <- grpcSrv.Serve(ctx)
 	}()
 
+	// Bootstrap path mappings from config (idempotent — only inserts missing ones).
+	bootstrapPathMappings(ctx, store, cfg, logger)
+
 	// Start core engine (job expansion + stale agent detection).
 	eng := engine.New(store, engine.Config{
 		DispatchInterval: cfg.Agent.DispatchInterval,
 		StaleThreshold:   cfg.Agent.HeartbeatTimeout,
 		ScriptBaseDir:    cfg.Agent.ScriptBaseDir,
 	}, logger)
+
+	// Attach controller-side analysis runner when configured.
+	analysisRunner := analysis.New(store, analysis.Config{
+		FFmpegBin:   cfg.Analysis.FFmpegBin,
+		FFprobeBin:  cfg.Analysis.FFprobeBin,
+		DoviToolBin: cfg.Analysis.DoviToolBin,
+		Concurrency: cfg.Analysis.Concurrency,
+	}, logger)
+	eng.SetAnalysisRunner(analysisRunner)
+	logger.Info("controller-side analysis runner attached",
+		"ffmpeg", cfg.Analysis.FFmpegBin,
+		"ffprobe", cfg.Analysis.FFprobeBin,
+		"concurrency", cfg.Analysis.Concurrency,
+	)
+
 	eng.Start(ctx)
 	logger.Info("core engine started",
 		"dispatch_interval", cfg.Agent.DispatchInterval,
@@ -177,6 +196,50 @@ func runServer(ctx context.Context, cfgPath string) error {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// bootstrapPathMappings inserts any path mappings defined in the config file
+// that do not already exist in the database (matched by name).  This lets
+// operators seed the initial set of mappings via config, then manage them at
+// runtime through the UI or API without config-file changes.
+func bootstrapPathMappings(ctx context.Context, store db.Store, cfg *config.Config, logger *slog.Logger) {
+	if len(cfg.Analysis.PathMappings) == 0 {
+		return
+	}
+
+	existing, err := store.ListPathMappings(ctx)
+	if err != nil {
+		logger.Warn("bootstrap path mappings: list failed", "err", err)
+		return
+	}
+
+	existingNames := make(map[string]bool, len(existing))
+	for _, m := range existing {
+		existingNames[m.Name] = true
+	}
+
+	for _, pm := range cfg.Analysis.PathMappings {
+		if pm.Name == "" || pm.Windows == "" || pm.Linux == "" {
+			continue
+		}
+		if existingNames[pm.Name] {
+			continue // already exists — do not overwrite operator changes
+		}
+		if _, err := store.CreatePathMapping(ctx, db.CreatePathMappingParams{
+			Name:          pm.Name,
+			WindowsPrefix: pm.Windows,
+			LinuxPrefix:   pm.Linux,
+		}); err != nil {
+			logger.Warn("bootstrap path mappings: create failed",
+				"name", pm.Name, "err", err)
+		} else {
+			logger.Info("bootstrap path mapping created",
+				"name", pm.Name,
+				"windows", pm.Windows,
+				"linux", pm.Linux,
+			)
+		}
+	}
+}
 
 // openStore loads config and opens a database connection.
 // The returned closer must be called when done.
