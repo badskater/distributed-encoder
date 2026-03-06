@@ -1,0 +1,59 @@
+# nFPM package descriptor — Distributed Encoder Controller (RPM)
+#
+# Build:
+#   VERSION=1.2.0 nfpm package --config nfpm-rpm.yaml --packager rpm --target dist/
+#
+# Or via Makefile:
+#   make rpm VERSION=1.2.0
+#
+# Install nFPM:
+#   go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+name:        distributed-encoder-controller
+arch:        amd64
+platform:    linux
+version:     ${VERSION}
+maintainer:  "badskater"
+description: |
+  Distributed Encoder Controller.
+  Orchestrates distributed video encoding across Windows Server agents.
+  Includes an embedded React web UI, REST API (port 8080), gRPC endpoint
+  with mTLS (port 9443), PostgreSQL-backed job queue, and webhook delivery.
+homepage:    https://github.com/badskater/distributed-encoder
+license:     MIT
+
+depends:
+  - shadow-utils
+
+contents:
+  # ── Controller binary ───────────────────────────────────────────────────────
+  - src: bin/controller
+    dst: /usr/bin/distributed-encoder-controller
+    file_info:
+      mode: 0755
+
+  # ── Config template (not overwritten on upgrade) ───────────────────────────
+  - src: configs/controller.yaml.example
+    dst: /etc/distributed-encoder/controller.yaml
+    type: config|noreplace
+
+  # ── Database migrations ────────────────────────────────────────────────────
+  - src: internal/db/migrations/
+    dst: /usr/share/distributed-encoder/migrations/
+
+  # ── Certs directory (operator populates with mTLS certs) ──────────────────
+  - dst: /etc/distributed-encoder/certs
+    type: dir
+    file_info:
+      mode: 0750
+      owner: distributed-encoder
+      group: distributed-encoder
+
+  # ── Systemd service unit (RPM path: /usr/lib/systemd/system/) ───────────────
+  - src: deployments/rpm/distributed-encoder-controller.service
+    dst: /usr/lib/systemd/system/distributed-encoder-controller.service
+
+scripts:
+  postinstall: deployments/rpm/postinstall.sh
+  preremove:   deployments/rpm/preremove.sh
+  postremove:  deployments/rpm/postremove.sh

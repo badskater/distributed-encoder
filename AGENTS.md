@@ -1,18 +1,22 @@
 # Agent Specification
 
-Detailed design for the Windows Server agent component of the Distributed Encoder system. For the full system architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
+Detailed design for the agent component of the Distributed Encoder system. For the full system architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
 ## 1. Overview
 
-The Agent is a **single static Go binary** (~15-20 MB) that runs as a **Windows Service**. It connects to the Controller via gRPC/mTLS, pulls tasks, executes batch/script files from UNC shares, and reports results. All task execution logs (stdout, stderr, agent-level events) are **streamed to the Controller** for centralized viewing in the web UI. It operates autonomously during network outages, buffering results and logs locally until reconnection.
+The Agent is a **single static Go binary** (~15-20 MB) that runs as a **Windows Service** (on Windows) or a **systemd service** (on Linux). It connects to the Controller via gRPC/mTLS, pulls tasks, executes scripts from UNC/NFS shares, and reports results. All task execution logs (stdout, stderr, agent-level events) are **streamed to the Controller** for centralized viewing in the web UI. It operates autonomously during network outages, buffering results and logs locally until reconnection.
+
+On **Windows** agents, tasks are delivered as `.bat` scripts executed via `cmd.exe`. On **Linux** agents, tasks are delivered as `.sh` scripts executed via `/bin/sh`. Source files are accessed via SMB/UNC shares on Windows or NFS mounts on Linux.
 
 ---
 
 ## 2. Installation & Configuration
 
 ### 2.1 Prerequisites
+
+#### Windows
 
 | Requirement | Notes |
 |---|---|
@@ -24,7 +28,21 @@ The Agent is a **single static Go binary** (~15-20 MB) that runs as a **Windows 
 | **GPU drivers** | Current NVIDIA/Intel/AMD drivers if GPU encoding is used. |
 | **Network** | Access to Controller on gRPC port (default 9443). Access to UNC file shares. |
 
+#### Linux
+
+| Requirement | Notes |
+|---|---|
+| **OS** | Ubuntu 22.04 LTS / Debian 12 / RHEL 9 or compatible |
+| **FFmpeg** | Required. Must include `libvmaf`. Install via package manager or static build. |
+| **VapourSynth** | Optional. Required if encoding with `.vpy` scripts. AviSynth+ is not available on Linux. |
+| **Video encoder** | x264, x265, SVT-AV1, or GPU encoder (NVENC/VA-API via ffmpeg). |
+| **GPU drivers** | NVIDIA: `nvidia-driver`; Intel: `intel-gpu-tools` / VA-API. |
+| **NFS client** | `nfs-common` (Debian/Ubuntu) or `nfs-utils` (RHEL). Shares must be mounted before service start. |
+| **Network** | Access to Controller on gRPC port (default 9443). NFS mounts accessible at configured paths. |
+
 ### 2.2 Service Installation
+
+#### Windows
 
 ```powershell
 # Install
@@ -41,17 +59,38 @@ The Agent is a **single static Go binary** (~15-20 MB) that runs as a **Windows 
 
 The binary uses [golang.org/x/sys/windows/svc](https://pkg.go.dev/golang.org/x/sys/windows/svc) for native Windows Service integration — no wrapper (NSSM) needed.
 
+#### Linux
+
+```bash
+# Install (writes /etc/systemd/system/distributed-encoder-agent.service, enables unit)
+sudo distencoder-agent install --config /etc/distributed-encoder/agent.yaml
+
+# Manage
+sudo distencoder-agent start
+sudo distencoder-agent stop
+sudo distencoder-agent uninstall   # removes unit file
+
+# Run interactively (for debugging)
+distencoder-agent run --config /etc/distributed-encoder/agent.yaml --debug
+```
+
+The binary integrates with **systemd** natively — the `install` subcommand writes the unit file, runs `systemctl daemon-reload`, and enables the service. Logs are written to the systemd journal (`journalctl -u distributed-encoder-agent -f`). See DEPLOYMENT.md §3.7 for the full Linux deployment procedure.
+
 ### 2.3 Configuration Reference
 
+Example files are provided for both platforms:
+- **Windows**: `configs/agent.yaml.example`
+- **Linux**: `configs/agent-linux.yaml.example`
+
 ```yaml
-# agent.yaml — full reference
+# agent.yaml — full reference (Windows paths shown; see agent-linux.yaml.example for Linux)
 
 controller:
   address: "controller.example.com:9443"
   tls:
-    cert: "C:\\DistEncoder\\certs\\agent.crt"
-    key: "C:\\DistEncoder\\certs\\agent.key"
-    ca: "C:\\DistEncoder\\certs\\ca.crt"
+    cert: "C:\\DistEncoder\\certs\\agent.crt"      # Linux: /etc/distributed-encoder/certs/agent.crt
+    key: "C:\\DistEncoder\\certs\\agent.key"        # Linux: /etc/distributed-encoder/certs/agent.key
+    ca: "C:\\DistEncoder\\certs\\ca.crt"            # Linux: /etc/distributed-encoder/certs/ca.crt
   # Reconnect settings (used during offline operation)
   reconnect:
     initial_delay: 5s
@@ -62,11 +101,11 @@ agent:
   # Overrides auto-detected hostname
   hostname: "ENCODE-01"
   # Local working directory for scripts and temp files
-  work_dir: "C:\\DistEncoder\\work"
+  work_dir: "C:\\DistEncoder\\work"                 # Linux: /var/lib/distributed-encoder-agent/work
   # Log output directory
-  log_dir: "C:\\DistEncoder\\logs"
+  log_dir: "C:\\DistEncoder\\logs"                  # Linux: /var/log/distributed-encoder-agent
   # SQLite database for offline result journaling
-  offline_db: "C:\\DistEncoder\\offline.db"
+  offline_db: "C:\\DistEncoder\\offline.db"         # Linux: /var/lib/distributed-encoder-agent/offline.db
   # Heartbeat interval
   heartbeat_interval: 30s
   # Poll interval when idle (looking for new tasks)
@@ -77,13 +116,13 @@ agent:
   keep_failed_jobs: 10
 
 tools:
-  ffmpeg: "C:\\Tools\\ffmpeg\\ffmpeg.exe"
-  ffprobe: "C:\\Tools\\ffmpeg\\ffprobe.exe"
-  x265: "C:\\Tools\\x265\\x265.exe"
-  x264: "C:\\Tools\\x264\\x264.exe"
+  ffmpeg: "C:\\Tools\\ffmpeg\\ffmpeg.exe"           # Linux: /usr/bin/ffmpeg
+  ffprobe: "C:\\Tools\\ffmpeg\\ffprobe.exe"         # Linux: /usr/bin/ffprobe
+  x265: "C:\\Tools\\x265\\x265.exe"                 # Linux: /usr/bin/x265
+  x264: "C:\\Tools\\x264\\x264.exe"                 # Linux: /usr/bin/x264
   svt_av1: ""
-  avs_pipe: "C:\\Program Files\\AviSynth+\\avs2pipemod.exe"
-  vspipe: "C:\\Program Files\\VapourSynth\\vspipe.exe"
+  avs_pipe: "C:\\Program Files\\AviSynth+\\avs2pipemod.exe"  # Linux: "" (not available on Linux)
+  vspipe: "C:\\Program Files\\VapourSynth\\vspipe.exe"       # Linux: /usr/bin/vspipe (if installed)
 
 gpu:
   enabled: true
@@ -94,11 +133,13 @@ gpu:
   # Monitor interval for GPU utilisation metrics
   monitor_interval: 5s
 
-# UNC path allow-list (security: agent refuses paths outside these prefixes)
+# Path allow-list (security: agent refuses paths outside these prefixes)
+# Windows: UNC paths           Linux: NFS mount paths
 allowed_shares:
-  - "\\\\NAS01\\media"
-  - "\\\\NAS01\\encodes"
-  - "\\\\FILESERVER\\video"
+  - "\\\\NAS01\\media"         # Windows UNC
+  - "\\\\NAS01\\encodes"       # Windows UNC
+  # - "/mnt/nas/media"         # Linux NFS mount
+  # - "/mnt/nas/encodes"       # Linux NFS mount
 
 logging:
   level: info          # debug, info, warn, error

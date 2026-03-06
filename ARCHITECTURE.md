@@ -2589,7 +2589,7 @@ User creates job via Web UI / API
 | Area | Description |
 |---|---|
 | **Chunk-based parallel encoding** | Split source at scene boundaries, encode segments in parallel across agents, concatenate. |
-| **Linux agent support** | Path validation now accepts POSIX absolute paths for NFS mounts alongside UNC paths. Remaining work: systemd service integration to replace the Windows Service wrapper. |
+| **Linux agent support** | ✅ Implemented — agent binary cross-compiles to Linux (`GOOS=linux`). systemd service integration via `install`/`start`/`stop`/`uninstall` subcommands (writes `/etc/systemd/system/<name>.service`). Tasks delivered as `.sh` scripts executed via `/bin/sh`. NFS mount paths accepted in `allowed_shares`. See DEPLOYMENT.md §3.7 and `configs/agent-linux.yaml.example`. |
 | **NFS support** | ✅ Implemented — allowed_shares and source path validation accept POSIX absolute paths (/mnt/nas/media) for NFS mounts alongside Windows UNC paths. Linux agents can mount NFS shares natively. |
 | **S3 / object storage** | Support cloud storage as source/destination in addition to UNC/NFS shares. |
 | **Multi-controller HA** | Active-passive or active-active controllers behind a load balancer for zero-downtime upgrades. |

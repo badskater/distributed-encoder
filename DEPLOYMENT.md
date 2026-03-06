@@ -10,7 +10,7 @@ Operational guide for deploying and running the Distributed Video Encoder system
 
 | Requirement | Minimum | Recommended |
 |---|---|---|
-| **OS** | Ubuntu 22.04 LTS (or Docker host) | Ubuntu 24.04 LTS |
+| **OS** | Ubuntu 22.04 LTS / RHEL 9 / Rocky Linux 9 (or any Docker host) | Ubuntu 24.04 LTS or Rocky Linux 9 |
 | **CPU** | 2 cores | 4+ cores |
 | **RAM** | 2 GB | 4+ GB |
 | **Disk** | 20 GB | 50+ GB (log retention, analysis data) |
@@ -153,6 +153,24 @@ Place `ca.crt`, `server.crt`, and `server.key` in a `certs/` directory accessibl
 
 ### 2.3 Docker Compose Launch
 
+The quickest path to a running controller is the provided bootstrap scripts, which install Docker CE, generate mTLS certificates, write the `.env`, and start the stack in a single command.
+
+**Debian / Ubuntu (22.04 / 24.04):**
+
+```bash
+sudo ./scripts/install-controller.sh
+```
+
+**RHEL / Rocky Linux / AlmaLinux 9:**
+
+```bash
+sudo ./scripts/install-controller-rpm.sh
+```
+
+Both scripts accept the same environment variables (`DOMAIN`, `AGENT_NAMES`, `CONTROLLER_VERSION`, `POSTGRES_PASSWORD`, `SESSION_SECRET`) and are idempotent.
+
+To start manually without the bootstrap script:
+
 ```bash
 # From the deployments/ directory
 cd deployments/
@@ -175,7 +193,24 @@ controller  | {"level":"info","msg":"gRPC server listening","port":9443,"tls":tr
 controller  | {"level":"info","msg":"HTTP server listening","port":8080}
 ```
 
-### 2.4 Bare-Metal (Ubuntu, No Docker)
+### 2.4 Bare-Metal — Debian / Ubuntu (No Docker)
+
+Install via the provided `.deb` package (recommended) or manually.
+
+**`.deb` package install:**
+
+```bash
+# Build the package (from source)
+make deb VERSION=1.2.0
+# Produces: dist/distributed-encoder-controller_1.2.0_amd64.deb
+
+# Install
+sudo apt install -y ./dist/distributed-encoder-controller_1.2.0_amd64.deb
+
+# Then follow the post-install instructions printed to the terminal.
+```
+
+**Manual install:**
 
 ```bash
 # Install PostgreSQL
@@ -212,6 +247,71 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now distencoder
 ```
+
+### 2.5 Bare-Metal — RHEL / Rocky Linux / AlmaLinux (No Docker)
+
+Install via the provided `.rpm` package (recommended) or manually.
+
+**`.rpm` package install:**
+
+```bash
+# Build the package (from source)
+make rpm VERSION=1.2.0
+# Produces: dist/distributed-encoder-controller-1.2.0.x86_64.rpm
+
+# Install
+sudo dnf install -y ./dist/distributed-encoder-controller-1.2.0.x86_64.rpm
+
+# Then follow the post-install instructions printed to the terminal.
+```
+
+**Manual install:**
+
+```bash
+# Install PostgreSQL
+sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+sudo dnf install -y postgresql16-server postgresql16
+sudo /usr/pgsql-16/bin/postgresql-16-setup initdb
+sudo systemctl enable --now postgresql-16
+
+# Create database and user
+sudo -u postgres psql -c "CREATE USER distenc WITH PASSWORD '<password>';"
+sudo -u postgres psql -c "CREATE DATABASE distencoder OWNER distenc;"
+
+# Download controller binary
+curl -Lo /usr/local/bin/distencoder \
+  https://releases.example.com/distencoder-controller-linux-amd64
+chmod +x /usr/local/bin/distencoder
+
+# Create systemd service
+cat > /usr/lib/systemd/system/distencoder.service << 'EOF'
+[Unit]
+Description=Distributed Encoder Controller
+After=network.target postgresql-16.service
+
+[Service]
+Type=simple
+User=distencoder
+EnvironmentFile=/etc/distencoder/.env
+ExecStart=/usr/local/bin/distencoder run --config /etc/distencoder/controller.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable --now distencoder
+```
+
+> **SELinux note:** On RHEL/Rocky with SELinux enforcing, the binary must have the correct context. If the service fails to start, run:
+> ```bash
+> sudo restorecon -v /usr/local/bin/distencoder
+> # or for a package install:
+> sudo restorecon -rv /usr/bin/distributed-encoder-controller
+> ```
 
 ### 2.5 Initial Configuration via Web UI
 
@@ -390,6 +490,226 @@ For production, run the agent under a dedicated low-privilege service account:
    ```powershell
    sc.exe config DistEncoderAgent obj= "DOMAIN\svc_distencoder" password= "<password>"
    ```
+
+---
+
+### 3.7 Linux Agent Deployment
+
+Linux agents are supported for NFS-based encoding workflows. The agent binary is fully cross-compiled (`GOOS=linux GOARCH=amd64`) and integrates with **systemd** natively — no wrapper needed.
+
+#### 3.7.1 Prerequisites
+
+| Requirement | Notes |
+|---|---|
+| **OS** | Ubuntu 22.04 LTS / Debian 12 / RHEL 9 (or compatible) |
+| **FFmpeg** | 6.1+ — must include `libvmaf` for VMAF analysis tasks |
+| **x265 / x264** | Required for the respective encode templates |
+| **VapourSynth** | Optional — install only if `.vpy` script templates are used |
+| **GPU drivers** | NVIDIA: current `nvidia-driver` package; Intel: `intel-gpu-tools` |
+| **NFS client** | `nfs-common` (Debian/Ubuntu) or `nfs-utils` (RHEL) for mounting NAS shares |
+| **Network** | Access to Controller on gRPC port 9443; NFS mounts accessible at configured paths |
+
+**Option A — package install (recommended):**
+
+Debian / Ubuntu:
+
+```bash
+# Build or download the .deb package, then:
+sudo apt install -y ./dist/distributed-encoder-agent_<version>_amd64.deb
+# Post-install instructions are printed to the terminal.
+```
+
+RHEL / Rocky Linux / AlmaLinux:
+
+```bash
+# Build or download the .rpm package, then:
+sudo dnf install -y ./dist/distributed-encoder-agent-<version>.x86_64.rpm
+# Post-install instructions are printed to the terminal.
+```
+
+The package creates the service user, directories, and systemd unit automatically. Skip to §3.7.3 to configure and start.
+
+**Option B — manual install (tool prerequisites):**
+
+Debian / Ubuntu:
+
+```bash
+# Core tools
+sudo apt-get install -y ffmpeg x265 x264 nfs-common
+
+# NVIDIA GPU (if applicable)
+sudo apt-get install -y nvidia-driver nvidia-cuda-toolkit
+
+# VapourSynth (optional)
+sudo apt-get install -y vapoursynth
+```
+
+RHEL / Rocky Linux / AlmaLinux:
+
+```bash
+# Enable EPEL and RPM Fusion for ffmpeg, x265, x264
+sudo dnf install -y epel-release
+sudo dnf install -y --nogpgcheck \
+  https://download1.rpmfusion.org/free/el/rpmfusion-free-release-$(rpm -E %rhel).noarch.rpm \
+  https://download1.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-$(rpm -E %rhel).noarch.rpm
+sudo dnf install -y ffmpeg x265 x264 nfs-utils
+
+# NVIDIA GPU (if applicable) — requires EPEL + RPM Fusion nonfree
+sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda
+
+# VapourSynth (optional — build from source or use a COPR repository)
+```
+
+#### 3.7.2 Directory Structure
+
+```
+/etc/distributed-encoder/
+├── agent.yaml          (config — readable by service user only)
+└── certs/
+    ├── ca.crt          (same CA as controller)
+    ├── agent.crt
+    └── agent.key
+
+/var/lib/distributed-encoder-agent/
+├── work/               (auto-created, job scripts and temp files)
+└── offline.db          (auto-created, SQLite journal)
+
+/var/log/distributed-encoder-agent/
+└── agent.log           (auto-created, rotated)
+
+/usr/local/bin/
+└── distencoder-agent   (the agent binary)
+```
+
+Set up directories and permissions:
+
+```bash
+sudo useradd -r -s /sbin/nologin distencoder-agent
+
+sudo mkdir -p /etc/distributed-encoder/certs
+sudo mkdir -p /var/lib/distributed-encoder-agent
+sudo mkdir -p /var/log/distributed-encoder-agent
+
+sudo chown -R distencoder-agent: /var/lib/distributed-encoder-agent
+sudo chown -R distencoder-agent: /var/log/distributed-encoder-agent
+sudo chown root:distencoder-agent /etc/distributed-encoder/agent.yaml
+sudo chmod 640 /etc/distributed-encoder/agent.yaml
+sudo chmod 600 /etc/distributed-encoder/certs/agent.key
+```
+
+#### 3.7.3 Agent Configuration
+
+Copy the example config and edit for your environment:
+
+```bash
+sudo cp configs/agent-linux.yaml.example /etc/distributed-encoder/agent.yaml
+sudo nano /etc/distributed-encoder/agent.yaml
+```
+
+Minimum required changes:
+
+```yaml
+controller:
+  address: "<controller-hostname-or-ip>:9443"
+  tls:
+    cert: "/etc/distributed-encoder/certs/agent.crt"
+    key:  "/etc/distributed-encoder/certs/agent.key"
+    ca:   "/etc/distributed-encoder/certs/ca.crt"
+
+tools:
+  ffmpeg:  "/usr/bin/ffmpeg"
+  ffprobe: "/usr/bin/ffprobe"
+  x265:    "/usr/bin/x265"
+  x264:    "/usr/bin/x264"
+
+allowed_shares:
+  - "/mnt/nas/media"
+  - "/mnt/nas/encodes"
+```
+
+See `configs/agent-linux.yaml.example` for the full reference.
+
+#### 3.7.4 NFS Mounts
+
+Add NFS mounts to `/etc/fstab` so they are available before the agent starts:
+
+```
+nas01.example.com:/media    /mnt/nas/media    nfs    defaults,_netdev,ro    0 0
+nas01.example.com:/encodes  /mnt/nas/encodes  nfs    defaults,_netdev,rw    0 0
+```
+
+Mount them now:
+
+```bash
+sudo mkdir -p /mnt/nas/media /mnt/nas/encodes
+sudo mount -a
+```
+
+The `_netdev` option ensures the mounts are brought up after the network is available, before the agent service starts.
+
+#### 3.7.5 systemd Service Installation
+
+> **Package installs** (`.deb` / `.rpm`) register and enable the systemd unit automatically during package installation — skip this section if you used Option A.
+
+For a manual binary install, copy the binary and register the service as root:
+
+```bash
+sudo cp distencoder-agent /usr/local/bin/distencoder-agent
+sudo chmod +x /usr/local/bin/distencoder-agent
+
+# Write the systemd unit file and enable the service
+sudo /usr/local/bin/distencoder-agent install \
+    --config /etc/distributed-encoder/agent.yaml
+
+# Start the service
+sudo /usr/local/bin/distencoder-agent start
+
+# Verify it is running
+systemctl status distributed-encoder-agent
+```
+
+The `install` subcommand writes `/etc/systemd/system/distributed-encoder-agent.service`, runs `systemctl daemon-reload`, and enables the unit so it starts automatically on boot.
+
+> **RPM / SELinux note:** On RHEL/Rocky with SELinux enforcing, run `sudo restorecon -v /usr/local/bin/distencoder-agent` if the service fails to start with an `AVC denied` error.
+
+To run interactively for testing:
+
+```bash
+sudo -u distencoder-agent /usr/local/bin/distencoder-agent run \
+    --config /etc/distributed-encoder/agent.yaml --debug
+```
+
+Service management:
+
+```bash
+sudo /usr/local/bin/distencoder-agent stop
+sudo /usr/local/bin/distencoder-agent start
+sudo /usr/local/bin/distencoder-agent uninstall   # removes unit file
+```
+
+Or use `systemctl` directly:
+
+```bash
+sudo systemctl stop distributed-encoder-agent
+sudo systemctl start distributed-encoder-agent
+sudo systemctl disable distributed-encoder-agent
+journalctl -u distributed-encoder-agent -f       # follow logs
+```
+
+#### 3.7.6 Tool Verification
+
+Before assigning jobs, verify all required tools are accessible as the service user:
+
+```bash
+sudo -u distencoder-agent ffmpeg -version | head -1
+sudo -u distencoder-agent x265 --version 2>&1 | head -1
+sudo -u distencoder-agent x264 --version 2>&1 | head -1
+
+# GPU (NVIDIA)
+sudo -u distencoder-agent nvidia-smi
+```
+
+The agent logs `tool not found` at startup and rejects tasks requiring missing tools.
 
 ---
 
