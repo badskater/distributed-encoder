@@ -8,7 +8,7 @@ COPY web/ .
 RUN npm run build
 
 # ── Stage 2: Go binary ────────────────────────────────────────────────────────
-FROM golang:1.24-alpine AS builder
+FROM golang:1.24-alpine AS go-builder
 ARG VERSION=dev
 RUN apk add --no-cache git
 WORKDIR /src
@@ -23,10 +23,44 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-s -w -X main.Version=${VERSION}" \
     -o /controller ./cmd/controller
 
-# ── Stage 3: Runtime ──────────────────────────────────────────────────────────
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata
+# ── Stage 3: FFmpeg 7 ─────────────────────────────────────────────────────────
+# mwader/static-ffmpeg provides statically-linked FFmpeg builds that include:
+#   libvmaf      — VMAF quality scoring
+#   libx265      — HEVC encoder with HDR10, HDR10+, HLG metadata passthrough
+#   libx264      — H.264 encoder
+#   libopus      — Opus audio encoder
+#   libfdk-aac   — High-quality AAC encoder
+#   libflac      — FLAC audio (also available as native encoder)
+#   HDR/DV       — Full HDR10/HDR10+/HLG/Dolby Vision stream and side-data support
+# Static binaries require no runtime libraries.
+FROM mwader/static-ffmpeg:7 AS ffmpeg-source
+
+# ── Stage 4: dovi_tool ────────────────────────────────────────────────────────
+# dovi_tool is an optional binary for precise Dolby Vision RPU profile extraction.
+# The musl static build runs on any Linux without extra libraries.
+FROM debian:bookworm-slim AS tools-fetcher
+ARG DOVI_TOOL_VERSION=2.1.3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL \
+        "https://github.com/quietvoid/dovi_tool/releases/download/${DOVI_TOOL_VERSION}/dovi_tool-${DOVI_TOOL_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+       | tar xz -C /usr/local/bin \
+    && chmod +x /usr/local/bin/dovi_tool
+
+# ── Stage 5: Runtime ─────────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=go-builder   /controller                  /app/controller
+COPY --from=ffmpeg-source /ffmpeg                      /usr/local/bin/ffmpeg
+COPY --from=ffmpeg-source /ffprobe                     /usr/local/bin/ffprobe
+COPY --from=tools-fetcher /usr/local/bin/dovi_tool     /usr/local/bin/dovi_tool
+
 WORKDIR /app
-COPY --from=builder /controller /app/controller
 EXPOSE 8080 9443
 ENTRYPOINT ["/app/controller", "run"]

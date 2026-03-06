@@ -60,9 +60,9 @@ tls:
 # path_mappings seeds the database on first startup.  After that, use the
 # web UI or API (/api/v1/path-mappings) to manage them at runtime.
 analysis:
-  ffmpeg_bin:    ""              # e.g. /usr/bin/ffmpeg
-  ffprobe_bin:   ""              # e.g. /usr/bin/ffprobe
-  dovi_tool_bin: ""              # optional: path to dovi_tool binary
+  ffmpeg_bin:    "/usr/local/bin/ffmpeg"
+  ffprobe_bin:   "/usr/local/bin/ffprobe"
+  dovi_tool_bin: "/usr/local/bin/dovi_tool"
   concurrency:   2               # max simultaneous controller-side analysis jobs
 
   path_mappings:

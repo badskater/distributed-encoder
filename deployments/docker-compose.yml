@@ -10,9 +10,24 @@ services:
       - "9443:9443"
     env_file:
       - ../.env
+    environment:
+      # Set if dovi_tool is installed at a non-default path (default: /usr/local/bin/dovi_tool)
+      # DOVI_TOOL_BIN: /usr/local/bin/dovi_tool
+    volumes:
+      # Mount NAS NFS shares so the analysis runner can access source files.
+      # Paths must match the linux_prefix values in path_mappings config.
+      # - /mnt/nas/media:/mnt/nas/media:rw
+      # - /mnt/nas/encodes:/mnt/nas/encodes:rw
+      # - /mnt/nas/temp:/mnt/nas/temp:rw
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/controller", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     restart: unless-stopped
 
   postgres:
