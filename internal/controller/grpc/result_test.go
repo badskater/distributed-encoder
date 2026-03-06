@@ -79,7 +79,8 @@ func (s *resultStub) UpdateAgentStatus(context.Context, string, string) error   
 func (s *resultStub) UpdateAgentHeartbeat(context.Context, db.UpdateAgentHeartbeatParams) error {
 	return nil
 }
-func (s *resultStub) SetAgentAPIKey(context.Context, string, string) error { return nil }
+func (s *resultStub) UpdateAgentVNCPort(context.Context, string, int) error { return nil }
+func (s *resultStub) SetAgentAPIKey(context.Context, string, string) error  { return nil }
 func (s *resultStub) MarkStaleAgents(context.Context, time.Duration) (int64, error) {
 	return 0, nil
 }

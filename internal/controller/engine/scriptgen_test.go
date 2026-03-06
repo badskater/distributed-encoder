@@ -46,6 +46,7 @@ func (s *scriptGenStub) GetAgentByName(context.Context, string) (*db.Agent, erro
 func (s *scriptGenStub) ListAgents(context.Context) ([]*db.Agent, error)                           { return nil, nil }
 func (s *scriptGenStub) UpdateAgentStatus(context.Context, string, string) error                   { return nil }
 func (s *scriptGenStub) UpdateAgentHeartbeat(context.Context, db.UpdateAgentHeartbeatParams) error { return nil }
+func (s *scriptGenStub) UpdateAgentVNCPort(context.Context, string, int) error                     { return nil }
 func (s *scriptGenStub) SetAgentAPIKey(context.Context, string, string) error                      { return nil }
 func (s *scriptGenStub) MarkStaleAgents(context.Context, time.Duration) (int64, error)             { return 0, nil }
 func (s *scriptGenStub) CreateSource(context.Context, db.CreateSourceParams) (*db.Source, error)   { return nil, nil }

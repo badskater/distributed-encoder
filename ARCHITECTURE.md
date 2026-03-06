@@ -2593,4 +2593,4 @@ User creates job via Web UI / API
 | **NFS support** | ✅ Implemented — allowed_shares and source path validation accept POSIX absolute paths (/mnt/nas/media) for NFS mounts alongside Windows UNC paths. Linux agents can mount NFS shares natively. |
 | **S3 / object storage** | Support cloud storage as source/destination in addition to UNC/NFS shares. |
 | **Multi-controller HA** | Active-passive or active-active controllers behind a load balancer for zero-downtime upgrades. |
-| **Web-based VNC/RDP** | View agent desktops from the web UI for debugging encode issues. |
+| **Web-based VNC/RDP** | ✅ Implemented — NoVNC browser client served by the controller at `/novnc/{agent_id}`. Controller proxies WebSocket to the agent's VNC TCP port. Agent auto-installs TightVNC via `setup-vnc` subcommand with configurable installer URL. VNC port reported to controller at registration; "Remote Desktop" button appears in the Agents page when vnc_port > 0. |

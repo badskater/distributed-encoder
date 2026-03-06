@@ -48,7 +48,8 @@ func (s *stubStore) UpdateAgentStatus(context.Context, string, string) error   {
 func (s *stubStore) UpdateAgentHeartbeat(context.Context, db.UpdateAgentHeartbeatParams) error {
 	return nil
 }
-func (s *stubStore) SetAgentAPIKey(context.Context, string, string) error { return nil }
+func (s *stubStore) UpdateAgentVNCPort(context.Context, string, int) error { return nil }
+func (s *stubStore) SetAgentAPIKey(context.Context, string, string) error  { return nil }
 func (s *stubStore) MarkStaleAgents(context.Context, time.Duration) (int64, error) {
 	return 0, nil
 }

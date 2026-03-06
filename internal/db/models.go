@@ -53,6 +53,9 @@ type Agent struct {
 	NVENC         bool       `json:"nvenc"`
 	QSV           bool       `json:"qsv"`
 	AMF           bool       `json:"amf"`
+	// VNCPort is the TCP port the agent's VNC server is listening on.
+	// 0 means VNC is not configured or not running on this agent.
+	VNCPort       int        `json:"vnc_port"`
 	APIKeyHash    *string    `json:"-"`
 	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
@@ -240,6 +243,7 @@ type UpsertAgentParams struct {
 	NVENC        bool
 	QSV          bool
 	AMF          bool
+	VNCPort      int
 }
 
 type UpdateAgentHeartbeatParams struct {

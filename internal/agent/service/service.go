@@ -36,6 +36,7 @@ Subcommands:
   start      Start the Windows Service
   stop       Stop the Windows Service
   run        Run in foreground (default if no subcommand or when started by SCM)
+  setup-vnc  Download (if vnc.installer_url is set) and silently install TightVNC
 
 Flags (all subcommands):
   --config <path>    Config file path (default: C:\ProgramData\distributed-encoder\agent.yaml)
@@ -52,6 +53,7 @@ Subcommands:
   start      Start the systemd service
   stop       Stop the systemd service
   run        Run in foreground (default if no subcommand)
+  setup-vnc  Install/configure VNC server (see vnc config section in agent.yaml)
 
 Flags (all subcommands):
   --config <path>    Config file path (default: /etc/distributed-encoder/agent.yaml)
@@ -139,6 +141,8 @@ func Run(args []string) error {
 		return stopService(serviceName)
 	case "run", "":
 		return runAgent(parsed, log)
+	case "setup-vnc":
+		return runSetupVNC(parsed, log)
 	case "help", "--help", "-h":
 		fmt.Print(usageText())
 		return nil
@@ -147,6 +151,20 @@ func Run(args []string) error {
 		fmt.Print(usageText())
 		return fmt.Errorf("unknown subcommand: %s", parsed.subcommand)
 	}
+}
+
+// runSetupVNC loads config and runs the VNC installation/configuration step.
+func runSetupVNC(parsed parsedArgs, log *slog.Logger) error {
+	cfg, err := agentcfg.Load(parsed.configPath)
+	if err != nil {
+		return fmt.Errorf("loading config from %s: %w", parsed.configPath, err)
+	}
+	log.Info("running VNC setup", "port", cfg.VNC.Port, "has_installer_url", cfg.VNC.InstallerURL != "")
+	if err := installAndConfigureVNC(cfg.VNC, log); err != nil {
+		return fmt.Errorf("vnc setup: %w", err)
+	}
+	log.Info("VNC setup complete")
+	return nil
 }
 
 // runAgent loads config and starts the agent either as a Windows Service or

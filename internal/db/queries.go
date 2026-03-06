@@ -124,8 +124,8 @@ func (s *pgStore) UpsertAgent(ctx context.Context, p UpsertAgentParams) (*Agent,
 	const q = `
 		INSERT INTO agents
 		    (name, hostname, ip_address, tags, gpu_vendor, gpu_model, gpu_enabled,
-		     agent_version, os_version, cpu_count, ram_mib, nvenc, qsv, amf)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+		     agent_version, os_version, cpu_count, ram_mib, nvenc, qsv, amf, vnc_port)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		ON CONFLICT (name) DO UPDATE SET
 		    hostname      = EXCLUDED.hostname,
 		    ip_address    = EXCLUDED.ip_address,
@@ -140,17 +140,18 @@ func (s *pgStore) UpsertAgent(ctx context.Context, p UpsertAgentParams) (*Agent,
 		    nvenc         = EXCLUDED.nvenc,
 		    qsv           = EXCLUDED.qsv,
 		    amf           = EXCLUDED.amf,
+		    vnc_port      = EXCLUDED.vnc_port,
 		    updated_at    = now()
 		RETURNING id, name, hostname, ip_address, status, tags,
 		          gpu_vendor, gpu_model, gpu_enabled,
 		          agent_version, os_version, cpu_count, ram_mib,
-		          nvenc, qsv, amf, api_key_hash, last_heartbeat,
+		          nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
 		          created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q,
 		p.Name, p.Hostname, p.IPAddress, p.Tags,
 		p.GPUVendor, p.GPUModel, p.GPUEnabled,
 		p.AgentVersion, p.OSVersion, p.CPUCount, p.RAMMIB,
-		p.NVENC, p.QSV, p.AMF,
+		p.NVENC, p.QSV, p.AMF, p.VNCPort,
 	)
 	return scanAgent(row)
 }
@@ -159,7 +160,7 @@ func (s *pgStore) GetAgentByID(ctx context.Context, id string) (*Agent, error) {
 	const q = `SELECT id, name, hostname, ip_address, status, tags,
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
-	                  nvenc, qsv, amf, api_key_hash, last_heartbeat,
+	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
 	                  created_at, updated_at
 	           FROM agents WHERE id = $1`
 	return scanAgent(s.pool.QueryRow(ctx, q, id))
@@ -169,7 +170,7 @@ func (s *pgStore) GetAgentByName(ctx context.Context, name string) (*Agent, erro
 	const q = `SELECT id, name, hostname, ip_address, status, tags,
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
-	                  nvenc, qsv, amf, api_key_hash, last_heartbeat,
+	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
 	                  created_at, updated_at
 	           FROM agents WHERE name = $1`
 	return scanAgent(s.pool.QueryRow(ctx, q, name))
@@ -179,7 +180,7 @@ func (s *pgStore) ListAgents(ctx context.Context) ([]*Agent, error) {
 	const q = `SELECT id, name, hostname, ip_address, status, tags,
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
-	                  nvenc, qsv, amf, api_key_hash, last_heartbeat,
+	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
 	                  created_at, updated_at
 	           FROM agents ORDER BY name`
 	rows, err := s.pool.Query(ctx, q)
@@ -229,6 +230,18 @@ func (s *pgStore) SetAgentAPIKey(ctx context.Context, id, hash string) error {
 	return err
 }
 
+func (s *pgStore) UpdateAgentVNCPort(ctx context.Context, id string, port int) error {
+	const q = `UPDATE agents SET vnc_port = $2, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id, port)
+	if err != nil {
+		return fmt.Errorf("db: update agent vnc_port: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // MarkStaleAgents sets the status of agents whose last_heartbeat is older than
 // olderThan to 'offline'. Returns the number of agents updated.
 func (s *pgStore) MarkStaleAgents(ctx context.Context, olderThan time.Duration) (int64, error) {
@@ -248,7 +261,7 @@ func scanAgent(row pgx.Row) (*Agent, error) {
 		&a.ID, &a.Name, &a.Hostname, &a.IPAddress, &a.Status, &a.Tags,
 		&a.GPUVendor, &a.GPUModel, &a.GPUEnabled,
 		&a.AgentVersion, &a.OSVersion, &a.CPUCount, &a.RAMMIB,
-		&a.NVENC, &a.QSV, &a.AMF, &a.APIKeyHash, &a.LastHeartbeat,
+		&a.NVENC, &a.QSV, &a.AMF, &a.VNCPort, &a.APIKeyHash, &a.LastHeartbeat,
 		&a.CreatedAt, &a.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {

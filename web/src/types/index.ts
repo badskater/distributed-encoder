@@ -47,6 +47,8 @@ export interface Agent {
   nvenc: boolean
   qsv: boolean
   amf: boolean
+  // vnc_port is non-zero when the agent has VNC configured and running.
+  vnc_port: number
   last_heartbeat: string | null
   created_at: string
 }

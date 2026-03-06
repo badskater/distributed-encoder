@@ -206,6 +206,12 @@ func (r *runner) register(ctx context.Context) error {
 			Vendor: r.primaryGPUVendor,
 		}
 	}
+	// Embed VNC port in tags using a reserved prefix so the controller can
+	// extract it without requiring a proto change. The controller strips this
+	// tag before storing the visible tags array.
+	if r.cfg.VNC.Enabled && r.cfg.VNC.Port > 0 {
+		info.Tags = append(info.Tags, fmt.Sprintf("__vnc_port=%d", r.cfg.VNC.Port))
+	}
 
 	delay := r.cfg.Controller.Reconnect.InitialDelay
 	if delay == 0 {

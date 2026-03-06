@@ -18,6 +18,7 @@ type Config struct {
 	Webhooks WebhooksConfig `mapstructure:"webhooks"`
 	TLS      TLSConfig      `mapstructure:"tls"`
 	Upgrade  UpgradeConfig  `mapstructure:"upgrade"`
+	VNC      VNCConfig      `mapstructure:"vnc"`
 }
 
 type ServerConfig struct {
@@ -94,6 +95,16 @@ type UpgradeConfig struct {
 	Version string `mapstructure:"version"`
 }
 
+// VNCConfig controls the web-based VNC remote desktop feature.
+type VNCConfig struct {
+	// NoVNCBaseURL is the base URL from which the noVNC JavaScript client
+	// library is loaded. Defaults to the unpkg CDN. Set this to a local
+	// path or URL for air-gapped deployments.
+	// Example: "https://unpkg.com/@novnc/novnc@1.5.0"
+	// Example (local): "http://controller:8080/novnc-assets"
+	NoVNCBaseURL string `mapstructure:"novnc_base_url"`
+}
+
 // Load reads the YAML config file at path and returns a populated Config.
 func Load(path string) (*Config, error) {
 	v := viper.New()
@@ -121,6 +132,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("webhooks.max_retries", 3)
 	v.SetDefault("upgrade.bin_dir", "/var/lib/distributed-encoder/agent-bins")
 	v.SetDefault("upgrade.version", "0.0.0")
+	v.SetDefault("vnc.novnc_base_url", "https://unpkg.com/@novnc/novnc@1.5.0")
 
 	v.AutomaticEnv()
 

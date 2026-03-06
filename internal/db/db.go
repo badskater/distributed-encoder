@@ -38,6 +38,7 @@ type Store interface {
 	ListAgents(ctx context.Context) ([]*Agent, error)
 	UpdateAgentStatus(ctx context.Context, id, status string) error
 	UpdateAgentHeartbeat(ctx context.Context, p UpdateAgentHeartbeatParams) error
+	UpdateAgentVNCPort(ctx context.Context, id string, port int) error
 	SetAgentAPIKey(ctx context.Context, id, hash string) error
 	MarkStaleAgents(ctx context.Context, olderThan time.Duration) (int64, error)
 

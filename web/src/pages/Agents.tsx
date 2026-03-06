@@ -94,7 +94,7 @@ export default function Agents() {
                 <td className="px-4 py-2 text-th-text-muted">
                   {a.tags.length > 0 ? a.tags.join(', ') : '—'}
                 </td>
-                <td className="px-4 py-2 flex gap-1">
+                <td className="px-4 py-2 flex gap-1 flex-wrap">
                   {(a.status === 'idle' || a.status === 'running') && (
                     <button
                       onClick={() => handleDrain(a.id)}
@@ -120,6 +120,22 @@ export default function Agents() {
                     >
                       {approving === a.id ? 'Approving…' : 'Approve'}
                     </button>
+                  )}
+                  {a.vnc_port > 0 && (
+                    <a
+                      href={`/novnc/${a.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs px-2 py-1 rounded"
+                      title={`Open remote desktop (VNC port ${a.vnc_port})`}
+                      style={{
+                        backgroundColor: 'var(--th-badge-running-bg)',
+                        color: 'var(--th-badge-running-text)',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      Remote Desktop
+                    </a>
                   )}
                 </td>
               </tr>

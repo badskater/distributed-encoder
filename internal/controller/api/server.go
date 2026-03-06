@@ -139,6 +139,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
 	mux.Handle("POST /api/v1/agents/{id}/approve", operator(s.handleApproveAgent))
 
+	// --- VNC remote desktop ---
+	// WebSocket proxy to the agent's VNC TCP port (noVNC binary framing).
+	mux.Handle("GET /api/v1/agents/{id}/vnc", operator(s.handleAgentVNCProxy))
+	// Standalone noVNC viewer HTML page — opens in a new browser tab.
+	mux.Handle("GET /novnc/{id}", viewer(s.handleNoVNCViewer))
+
 	// --- Agent enrollment tokens ---
 	mux.Handle("GET /api/v1/agent-tokens", admin(s.handleListEnrollmentTokens))
 	mux.Handle("POST /api/v1/agent-tokens", admin(s.handleCreateEnrollmentToken))

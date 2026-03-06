@@ -13,6 +13,7 @@ type Config struct {
 	Agent         AgentConfig      `mapstructure:"agent"`
 	Tools         ToolsConfig      `mapstructure:"tools"`
 	GPU           GPUConfig        `mapstructure:"gpu"`
+	VNC           VNCConfig        `mapstructure:"vnc"`
 	AllowedShares []string         `mapstructure:"allowed_shares"`
 	Logging       LoggingConfig    `mapstructure:"logging"`
 }
@@ -64,6 +65,23 @@ type GPUConfig struct {
 	MonitorInterval time.Duration `mapstructure:"monitor_interval"`
 }
 
+// VNCConfig controls the optional VNC server managed by the agent.
+// When Enabled is true, the agent will install (if InstallerURL is set) and
+// start TightVNC, then report the listening port to the controller so operators
+// can open a browser-based remote desktop session via the web UI.
+type VNCConfig struct {
+	// Enabled turns on VNC management. When false (default) VNC is ignored.
+	Enabled bool `mapstructure:"enabled"`
+	// Port is the TCP port TightVNC should listen on (default 5900).
+	Port int `mapstructure:"port"`
+	// Password is the VNC access password (required when Enabled).
+	Password string `mapstructure:"password"`
+	// InstallerURL is an HTTP(S) URL from which the TightVNC MSI will be
+	// downloaded if TightVNC is not already installed. Leave empty to skip
+	// the download/install step (assumes VNC is pre-installed).
+	InstallerURL string `mapstructure:"installer_url"`
+}
+
 type LoggingConfig struct {
 	Level               string        `mapstructure:"level"`
 	Format              string        `mapstructure:"format"`
@@ -89,6 +107,8 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("agent.keep_failed_jobs", 10)
 	v.SetDefault("gpu.enabled", true)
 	v.SetDefault("gpu.monitor_interval", "5s")
+	v.SetDefault("vnc.enabled", false)
+	v.SetDefault("vnc.port", 5900)
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.format", "json")
 	v.SetDefault("logging.max_size_mb", 100)
