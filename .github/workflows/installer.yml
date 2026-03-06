@@ -10,6 +10,9 @@ on:
         description: "Version string (without v prefix, e.g. 1.2.0)"
         required: true
 
+permissions:
+  contents: write   # required to upload assets to the GitHub Release
+
 jobs:
   build-installer:
     runs-on: windows-2022
@@ -30,7 +33,7 @@ jobs:
 
       - name: Install Inno Setup 6
         shell: pwsh
-        run: choco install innosetup --version 6.3.3 --yes --no-progress
+        run: choco install innosetup --yes --no-progress
 
       - name: Build installer
         shell: pwsh
@@ -54,7 +57,7 @@ jobs:
           Write-Host "Installer: $($exe.Name)  ($mb MB)"
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: distencoder-agent-setup-${{ steps.ver.outputs.v }}
           path: dist\distencoder-agent-setup.exe
