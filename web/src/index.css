@@ -1,6 +1,25 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme inline {
+  --color-th-bg:               var(--th-bg);
+  --color-th-surface:          var(--th-surface);
+  --color-th-surface-muted:    var(--th-surface-muted);
+  --color-th-text:             var(--th-text);
+  --color-th-text-secondary:   var(--th-text-secondary);
+  --color-th-text-muted:       var(--th-text-muted);
+  --color-th-text-subtle:      var(--th-text-subtle);
+  --color-th-border:           var(--th-border);
+  --color-th-border-subtle:    var(--th-border-subtle);
+  --color-th-nav-bg:           var(--th-nav-bg);
+  --color-th-nav-active:       var(--th-nav-active);
+  --color-th-nav-hover:        var(--th-nav-hover);
+  --color-th-nav-text:         var(--th-nav-text);
+  --color-th-input-bg:         var(--th-input-bg);
+  --color-th-input-border:     var(--th-input-border);
+  --color-th-log-bg:           var(--th-log-bg);
+  --color-th-log-text:         var(--th-log-text);
+  --color-th-progress-track:   var(--th-progress-track);
+}
 
 :root {
   /* surfaces */
