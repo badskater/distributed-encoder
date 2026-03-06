@@ -118,8 +118,6 @@ end;
 { Populate the tool-verification TMemo with FOUND/MISSING status for each
   encoding tool at its default path. }
 procedure RunToolVerification;
-const
-  Count = 6;
 var
   Names : array[0..5] of String;
   Paths : array[0..5] of String;
@@ -145,7 +143,7 @@ begin
   GToolsMemo.Lines.Add(StringOfChar('-', 72));
 
   Missing := 0;
-  for I := 0 to Count - 1 do
+  for I := 0 to 5 do
   begin
     if FileExists(Paths[I]) then
       Status := 'FOUND  '

@@ -49,7 +49,7 @@ jobs:
             -o bin/controller ./cmd/controller
 
       - name: Install nFPM
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.2
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.1
 
       - name: Package controller .deb
         run: |
@@ -122,7 +122,7 @@ jobs:
             -o bin/agent ./cmd/agent
 
       - name: Install nFPM
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.2
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.1
 
       - name: Package agent .deb
         run: |
@@ -165,7 +165,7 @@ jobs:
             -o bin/controller ./cmd/controller
 
       - name: Install nFPM
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.2
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.1
 
       - name: Package controller .rpm
         run: |
@@ -199,7 +199,7 @@ jobs:
             -o bin/agent ./cmd/agent
 
       - name: Install nFPM
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.2
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.1
 
       - name: Package agent .rpm
         run: |
