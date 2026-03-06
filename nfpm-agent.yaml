@@ -23,9 +23,12 @@ priority:    optional
 
 depends:
   - adduser
+  - ca-certificates
 
 recommends:
   - ffmpeg
+  - x265
+  - x264
 
 contents:
   # ── Agent binary ─────────────────────────────────────────────────────────────
