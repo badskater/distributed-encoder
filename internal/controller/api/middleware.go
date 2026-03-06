@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -38,8 +39,29 @@ func corsMiddleware(origins []string, next http.Handler) http.Handler {
 
 // rateLimitMiddleware enforces per-IP token-bucket rate limiting.
 // Limit: 200 req/s, burst: 400.
+// Idle entries are evicted after 10 minutes to prevent unbounded memory growth.
 func rateLimitMiddleware(next http.Handler) http.Handler {
-	var clients sync.Map // map[string]*rate.Limiter
+	type entry struct {
+		limiter  *rate.Limiter
+		lastSeen time.Time
+	}
+
+	var clients sync.Map // map[string]*entry
+
+	// Background goroutine evicts entries not seen in the last 10 minutes.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			cutoff := time.Now().Add(-10 * time.Minute)
+			clients.Range(func(k, v any) bool {
+				if v.(*entry).lastSeen.Before(cutoff) {
+					clients.Delete(k)
+				}
+				return true
+			})
+		}
+	}()
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
@@ -47,10 +69,11 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 			ip = ip[:idx]
 		}
 
-		val, _ := clients.LoadOrStore(ip, rate.NewLimiter(200, 400))
-		limiter := val.(*rate.Limiter)
+		val, _ := clients.LoadOrStore(ip, &entry{limiter: rate.NewLimiter(200, 400)})
+		e := val.(*entry)
+		e.lastSeen = time.Now()
 
-		if !limiter.Allow() {
+		if !e.limiter.Allow() {
 			w.Header().Set("Content-Type", "application/problem+json")
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(map[string]any{

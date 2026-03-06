@@ -166,6 +166,76 @@ make deb VERSION=1.2.0
 # Output: dist/distributed-encoder-controller_1.2.0_linux_amd64.deb
 ```
 
+### Controller — Native install (RHEL / Rocky Linux / AlmaLinux 9)
+
+Download `distributed-encoder-controller_*_linux_amd64.rpm` from the [latest GitHub Release](https://github.com/badskater/distributed-encoder/releases/latest):
+
+```bash
+sudo dnf install -y ./distributed-encoder-controller_*_linux_amd64.rpm
+```
+
+Then complete the setup:
+
+1. **Install PostgreSQL** (if not already running):
+   ```bash
+   sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+   sudo dnf -qy module disable postgresql
+   sudo dnf install -y postgresql16-server
+   sudo /usr/pgsql-16/bin/postgresql-16-setup initdb
+   sudo systemctl enable --now postgresql-16
+   ```
+
+2. **Edit the config** — `/etc/distributed-encoder/controller.yaml`
+   - `database.url` — PostgreSQL connection string
+   - `grpc.tls.cert` / `key` / `ca` — mTLS certificate paths (place files in `/etc/distributed-encoder/certs/`)
+   - `auth.session_secret` — at least 32 random characters: `openssl rand -hex 32`
+
+3. **Run database migrations** (requires [`golang-migrate`](https://github.com/golang-migrate/migrate)):
+   ```bash
+   migrate -path /usr/share/distributed-encoder/migrations \
+           -database "postgres://distencoder:<pass>@localhost:5432/distencoder" up
+   ```
+
+4. **Start the service:**
+   ```bash
+   sudo systemctl start distributed-encoder-controller
+   sudo systemctl status distributed-encoder-controller
+   ```
+
+The web UI is available at `http://<host>:8080`.
+Logs: `journalctl -u distributed-encoder-controller -f`
+
+> **SELinux note:** If the service fails with an AVC denial, run:
+> `sudo restorecon -rv /usr/bin/distributed-encoder-controller`
+
+To build the package locally:
+
+```bash
+make rpm VERSION=1.2.0
+# Output: dist/distributed-encoder-controller_1.2.0.x86_64.rpm
+```
+
+---
+
+### Agent — Linux
+
+```bash
+# Debian / Ubuntu
+sudo CONTROLLER_ADDRESS=encoder.example.com:9443 \
+     AGENT_HOSTNAME=encode-01 \
+     AGENT_VERSION=1.0.0 \
+     CERT_DIR=/tmp/certs \
+     ./scripts/install-agent-linux.sh
+
+# Or install the package directly and configure manually
+sudo apt install ./distributed-encoder-agent_*_linux_amd64.deb     # Debian/Ubuntu
+sudo dnf install ./distributed-encoder-agent_*.x86_64.rpm          # RHEL/Rocky
+```
+
+The script detects the distro, downloads the appropriate package, copies certificates, writes `/etc/distributed-encoder/agent.yaml`, and starts the systemd service.
+
+---
+
 ### Agent — Windows Server
 
 #### GUI Installer (recommended)

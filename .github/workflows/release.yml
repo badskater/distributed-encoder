@@ -135,6 +135,83 @@ jobs:
         with:
           files: dist/distributed-encoder-agent_*.deb
 
+  # ── Controller: .rpm package ─────────────────────────────────────────────────
+  controller-rpm:
+    name: Controller .rpm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web UI
+        run: cd web && npm ci && npm run build
+
+      - name: Build controller binary (linux/amd64)
+        run: |
+          mkdir -p bin
+          VERSION="${GITHUB_REF_NAME#v}"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags="-s -w -X main.Version=${VERSION}" \
+            -o bin/controller ./cmd/controller
+
+      - name: Install nFPM
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Package controller .rpm
+        run: |
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME#v}" \
+            nfpm package --config nfpm-rpm.yaml --packager rpm --target dist/
+
+      - name: Upload controller .rpm to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/distributed-encoder-controller_*.rpm
+
+  # ── Agent: Linux .rpm package ─────────────────────────────────────────────────
+  agent-linux-rpm:
+    name: Agent Linux .rpm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Build agent binary (linux/amd64)
+        run: |
+          mkdir -p bin
+          VERSION="${GITHUB_REF_NAME#v}"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags="-s -w -X main.Version=${VERSION}" \
+            -o bin/agent ./cmd/agent
+
+      - name: Install nFPM
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Package agent .rpm
+        run: |
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME#v}" \
+            nfpm package --config nfpm-agent-rpm.yaml --packager rpm --target dist/
+
+      - name: Upload agent .rpm to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/distributed-encoder-agent_*.rpm
+
   # ── Agent: Windows .exe ───────────────────────────────────────────────────────
   agent-windows-exe:
     name: Agent Windows .exe
