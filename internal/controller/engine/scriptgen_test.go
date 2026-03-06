@@ -107,6 +107,17 @@ func (s *scriptGenStub) RetryFailedTasksForJob(context.Context, string) error   
 func (s *scriptGenStub) ListJobLogs(context.Context, db.ListJobLogsParams) ([]*db.TaskLog, error) { return nil, nil }
 func (s *scriptGenStub) PruneOldTaskLogs(context.Context, time.Time) error                       { return nil }
 func (s *scriptGenStub) Ping(context.Context) error                                               { return nil }
+func (s *scriptGenStub) CreatePathMapping(context.Context, db.CreatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *scriptGenStub) GetPathMappingByID(context.Context, string) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *scriptGenStub) ListPathMappings(context.Context) ([]*db.PathMapping, error) { return nil, nil }
+func (s *scriptGenStub) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *scriptGenStub) DeletePathMapping(context.Context, string) error { return nil }
 
 // ---------------------------------------------------------------------------
 // RenderSingle tests

@@ -190,6 +190,17 @@ func (s *stubStore) ListJobLogs(context.Context, db.ListJobLogsParams) ([]*db.Ta
 	return nil, nil
 }
 func (s *stubStore) PruneOldTaskLogs(context.Context, time.Time) error { return nil }
+func (s *stubStore) CreatePathMapping(context.Context, db.CreatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *stubStore) GetPathMappingByID(context.Context, string) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *stubStore) ListPathMappings(context.Context) ([]*db.PathMapping, error) { return nil, nil }
+func (s *stubStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *stubStore) DeletePathMapping(context.Context, string) error { return nil }
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -286,6 +297,17 @@ type listJobsStore struct {
 func (s *listJobsStore) ListJobs(_ context.Context, _ db.ListJobsFilter) ([]*db.Job, int64, error) {
 	return s.jobs, s.total, nil
 }
+func (s *listJobsStore) CreatePathMapping(context.Context, db.CreatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *listJobsStore) GetPathMappingByID(context.Context, string) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *listJobsStore) ListPathMappings(context.Context) ([]*db.PathMapping, error) { return nil, nil }
+func (s *listJobsStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *listJobsStore) DeletePathMapping(context.Context, string) error { return nil }
 
 // ---------------------------------------------------------------------------
 // TestHandleGetJob

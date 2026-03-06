@@ -206,6 +206,17 @@ func (s *resultStub) ListJobLogs(context.Context, db.ListJobLogsParams) ([]*db.T
 }
 func (s *resultStub) PruneOldTaskLogs(context.Context, time.Time) error { return nil }
 func (s *resultStub) Ping(context.Context) error                        { return nil }
+func (s *resultStub) CreatePathMapping(context.Context, db.CreatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *resultStub) GetPathMappingByID(context.Context, string) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *resultStub) ListPathMappings(context.Context) ([]*db.PathMapping, error) { return nil, nil }
+func (s *resultStub) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *resultStub) DeletePathMapping(context.Context, string) error { return nil }
 
 // ---------------------------------------------------------------------------
 // Test helpers

@@ -193,6 +193,17 @@ func (s *authStubStore) ListJobLogs(context.Context, db.ListJobLogsParams) ([]*d
 	return nil, nil
 }
 func (s *authStubStore) PruneOldTaskLogs(context.Context, time.Time) error { return nil }
+func (s *authStubStore) CreatePathMapping(context.Context, db.CreatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *authStubStore) GetPathMappingByID(context.Context, string) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *authStubStore) ListPathMappings(context.Context) ([]*db.PathMapping, error) { return nil, nil }
+func (s *authStubStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *authStubStore) DeletePathMapping(context.Context, string) error { return nil }
 
 // ---------------------------------------------------------------------------
 // Test helpers

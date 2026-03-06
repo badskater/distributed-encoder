@@ -195,6 +195,17 @@ func (s *senderStubStore) ListJobLogs(context.Context, db.ListJobLogsParams) ([]
 	return nil, nil
 }
 func (s *senderStubStore) PruneOldTaskLogs(context.Context, time.Time) error { return nil }
+func (s *senderStubStore) CreatePathMapping(context.Context, db.CreatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *senderStubStore) GetPathMappingByID(context.Context, string) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *senderStubStore) ListPathMappings(context.Context) ([]*db.PathMapping, error) { return nil, nil }
+func (s *senderStubStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
+	return nil, nil
+}
+func (s *senderStubStore) DeletePathMapping(context.Context, string) error { return nil }
 
 // ---------------------------------------------------------------------------
 // TestSenderSend_success — delivers on first attempt to a real HTTP server
